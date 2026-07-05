@@ -4,12 +4,13 @@ import { listResolvedMockCalls } from "@/lib/mock-calls";
 import {
   escapeCsvField,
   formatCallTypeLabel,
-  formatDate,
-  formatElapsedHMS,
-  formatResponseTime,
-  formatTime,
-} from "@/lib/utils";
-import { endOfDay, parseISO, startOfDay } from "date-fns";
+  formatDuration,
+  formatLocalDateTime,
+  getLocalDateKey,
+  getTimezoneFromSearchParams,
+  isInstantInLocalDateRange,
+  toStoredISOString,
+} from "@/lib/datetime";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -24,16 +25,14 @@ export async function GET(request: NextRequest) {
   const outcomeId = searchParams.get("outcomeId");
   const userId = searchParams.get("userId");
   const search = searchParams.get("search")?.toLowerCase();
+  const timeZone = getTimezoneFromSearchParams(searchParams);
 
   let calls = listResolvedMockCalls();
 
-  if (startDate) {
-    const start = startOfDay(parseISO(startDate));
-    calls = calls.filter((call) => new Date(call.startTime) >= start);
-  }
-  if (endDate) {
-    const end = endOfDay(parseISO(endDate));
-    calls = calls.filter((call) => new Date(call.startTime) <= end);
+  if (startDate && endDate) {
+    calls = calls.filter((call) =>
+      isInstantInLocalDateRange(call.startTime, startDate, endDate, timeZone)
+    );
   }
   if (callTypeId) calls = calls.filter((call) => call.callTypeId === callTypeId);
   if (outcomeId) calls = calls.filter((call) => call.outcomeId === outcomeId);
@@ -72,18 +71,16 @@ export async function GET(request: NextRequest) {
       formatCallTypeLabel(call),
       call.rapidResponseCategory?.name ?? "",
       call.unitLocation,
-      `${formatDate(call.startTime)} ${formatTime(call.startTime)}`,
+      formatLocalDateTime(call.startTime, timeZone),
       call.teamArrivalTime
-        ? `${formatDate(call.teamArrivalTime)} ${formatTime(call.teamArrivalTime)}`
+        ? formatLocalDateTime(call.teamArrivalTime, timeZone)
         : "",
       call.responseTimeSeconds != null
-        ? formatResponseTime(call.responseTimeSeconds)
+        ? formatDuration(call.responseTimeSeconds, "response")
         : "",
-      call.resolvedTime
-        ? `${formatDate(call.resolvedTime)} ${formatTime(call.resolvedTime)}`
-        : "",
+      call.resolvedTime ? formatLocalDateTime(call.resolvedTime, timeZone) : "",
       call.totalCallDurationSeconds != null
-        ? formatElapsedHMS(call.totalCallDurationSeconds)
+        ? formatDuration(call.totalCallDurationSeconds, "elapsed")
         : "",
       call.outcome?.name ?? "",
       call.additionalNotes ?? "",
@@ -95,7 +92,7 @@ export async function GET(request: NextRequest) {
   );
 
   const csv = [headers.join(","), ...rows].join("\n");
-  const filename = `trace-call-history-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = `trace-call-history-${getLocalDateKey(toStoredISOString(), timeZone)}.csv`;
 
   return new NextResponse(csv, {
     headers: {

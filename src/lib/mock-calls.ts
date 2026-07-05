@@ -6,6 +6,7 @@ import {
   isCodeBlueType,
   isRapidResponseType,
 } from "@/lib/mock-data";
+import { toStoredISOString } from "@/lib/datetime";
 
 export type CallStatus = "ACTIVE" | "RESOLVED";
 
@@ -94,10 +95,12 @@ function serializeCall(call: MockCallRecord): SerializedMockCall | null {
     rapidResponseCategory,
     unitLocation: call.unitLocation,
     additionalNotes: call.additionalNotes,
-    startTime: call.startTime.toISOString(),
-    teamArrivalTime: call.teamArrivalTime?.toISOString() ?? null,
+    startTime: toStoredISOString(call.startTime),
+    teamArrivalTime: call.teamArrivalTime
+      ? toStoredISOString(call.teamArrivalTime)
+      : null,
     responseTimeSeconds: call.responseTimeSeconds,
-    resolvedTime: call.resolvedTime?.toISOString() ?? null,
+    resolvedTime: call.resolvedTime ? toStoredISOString(call.resolvedTime) : null,
     totalCallDurationSeconds: call.totalCallDurationSeconds,
     outcomeId: call.outcomeId,
     outcome,

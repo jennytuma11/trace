@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatDurationSeconds, formatElapsedHMS } from "@/lib/utils";
+import { formatDuration } from "@/lib/datetime";
 
 interface CallTimerProps {
   startTime: string;
@@ -37,7 +37,9 @@ export function CallTimer({
   }, [startTime, stopTime]);
 
   const formatted =
-    format === "hms" ? formatElapsedHMS(elapsed) : formatDurationSeconds(elapsed);
+    format === "hms"
+      ? formatDuration(elapsed, "elapsed")
+      : formatDuration(elapsed, "compact");
 
   return (
     <div className={className}>

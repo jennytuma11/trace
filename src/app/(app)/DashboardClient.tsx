@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { KpiCard } from "@/components/KpiCard";
 import { ActionButton } from "@/components/ActionButton";
 import { Role } from "@prisma/client";
-import { formatTotalMinutes } from "@/lib/utils";
+import { appendTimezoneParam, formatTotalMinutes, getUserTimezone } from "@/lib/datetime";
 
 interface DashboardData {
   totalCallsToday: number;
@@ -28,7 +28,8 @@ export function DashboardClient({ user }: DashboardPageProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/dashboard")
+    const params = appendTimezoneParam(new URLSearchParams(), getUserTimezone());
+    fetch(`/api/dashboard?${params}`)
       .then((r) => r.json())
       .then(setData)
       .finally(() => setLoading(false));

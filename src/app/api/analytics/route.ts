@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { listResolvedMockCalls } from "@/lib/mock-calls";
-import { getCallDurationMinutes } from "@/lib/utils";
-import { endOfDay, format, parseISO, startOfDay } from "date-fns";
+import {
+  formatLocalDateKey,
+  getCallDurationMinutes,
+  getLocalDateKey,
+  getLocalHour,
+  getLocalHourLabel,
+  getTimezoneFromSearchParams,
+  isInstantInLocalDateRange,
+} from "@/lib/datetime";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -13,16 +20,14 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
+  const timeZone = getTimezoneFromSearchParams(searchParams);
 
   let calls = listResolvedMockCalls();
 
   if (startDate && endDate) {
-    const start = startOfDay(parseISO(startDate));
-    const end = endOfDay(parseISO(endDate));
-    calls = calls.filter((call) => {
-      const received = new Date(call.startTime);
-      return received >= start && received <= end;
-    });
+    calls = calls.filter((call) =>
+      isInstantInLocalDateRange(call.startTime, startDate, endDate, timeZone)
+    );
   }
 
   const callsByType: Record<string, number> = {};
@@ -39,7 +44,7 @@ export async function GET(request: NextRequest) {
     callsByType[typeLabel] = (callsByType[typeLabel] || 0) + 1;
     callsByUnit[call.unitLocation] = (callsByUnit[call.unitLocation] || 0) + 1;
 
-    const hour = new Date(call.startTime).getHours();
+    const hour = getLocalHour(call.startTime, timeZone);
     callsByHour[hour] = (callsByHour[hour] || 0) + 1;
 
     const duration = getCallDurationMinutes(call.startTime, call.resolvedTime);
@@ -53,18 +58,12 @@ export async function GET(request: NextRequest) {
       outcomes[call.outcome.name] = (outcomes[call.outcome.name] || 0) + 1;
     }
 
-    const dayKey = format(new Date(call.startTime), "yyyy-MM-dd");
+    const dayKey = getLocalDateKey(call.startTime, timeZone);
     teamTimeByDay[dayKey] = (teamTimeByDay[dayKey] || 0) + duration;
   }
 
-  const hourLabels = Array.from({ length: 24 }, (_, i) => {
-    const h = i % 12 || 12;
-    const ampm = i < 12 ? "AM" : "PM";
-    return `${h}${ampm}`;
-  });
-
   const callsByHourData = Array.from({ length: 24 }, (_, hour) => ({
-    hour: hourLabels[hour],
+    hour: getLocalHourLabel(hour),
     count: callsByHour[hour] || 0,
   }));
 
@@ -76,7 +75,7 @@ export async function GET(request: NextRequest) {
   const teamTimeByDayData = Object.entries(teamTimeByDay)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, minutes]) => ({
-      date: format(parseISO(date), "MMM d"),
+      date: formatLocalDateKey(date),
       minutes,
       hours: Math.round((minutes / 60) * 10) / 10,
     }));

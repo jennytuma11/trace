@@ -12,7 +12,7 @@ import {
   TeamTimeChart,
 } from "@/components/Charts";
 import { Role } from "@prisma/client";
-import { toISODateInput } from "@/lib/utils";
+import { appendTimezoneParam, getUserTimezone, toISODateInput } from "@/lib/datetime";
 import { subDays } from "date-fns";
 
 interface AnalyticsData {
@@ -31,19 +31,23 @@ interface AnalyticsClientProps {
 
 export function AnalyticsClient({ user }: AnalyticsClientProps) {
   const today = new Date();
-  const [startDate, setStartDate] = useState(toISODateInput(subDays(today, 30)));
-  const [endDate, setEndDate] = useState(toISODateInput(today));
+  const timeZone = getUserTimezone();
+  const [startDate, setStartDate] = useState(toISODateInput(subDays(today, 30), timeZone));
+  const [endDate, setEndDate] = useState(toISODateInput(today, timeZone));
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({ startDate, endDate });
+    const params = appendTimezoneParam(
+      new URLSearchParams({ startDate, endDate }),
+      timeZone
+    );
     fetch(`/api/analytics?${params}`)
       .then((r) => r.json())
       .then(setData)
       .finally(() => setLoading(false));
-  }, [startDate, endDate]);
+  }, [startDate, endDate, timeZone]);
 
   return (
     <AppShell user={user}>

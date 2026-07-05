@@ -1,21 +1,28 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import {
   countActiveMockCalls,
   getActiveCallForUser,
   listResolvedMockCalls,
 } from "@/lib/mock-calls";
-import { getCallDurationMinutes, getTodayRange, getWeekRange } from "@/lib/utils";
+import {
+  getCallDurationMinutes,
+  getTimezoneFromSearchParams,
+  getTodayRangeInTimezone,
+  getWeekRangeInTimezone,
+  toStoredISOString,
+} from "@/lib/datetime";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = new Date();
-  const { start: todayStart, end: todayEnd } = getTodayRange();
-  const { start: weekStart, end: weekEnd } = getWeekRange();
+  const { searchParams } = new URL(request.url);
+  const timeZone = getTimezoneFromSearchParams(searchParams);
+  const { start: todayStart, end: todayEnd } = getTodayRangeInTimezone(timeZone);
+  const { start: weekStart, end: weekEnd } = getWeekRangeInTimezone(timeZone);
 
   const resolvedCalls = listResolvedMockCalls();
   const todayCalls = resolvedCalls.filter((call) => {
@@ -29,9 +36,7 @@ export async function GET() {
 
   const durations = todayCalls
     .filter((c) => c.resolvedTime)
-    .map((c) =>
-      getCallDurationMinutes(c.startTime, c.resolvedTime!)
-    );
+    .map((c) => getCallDurationMinutes(c.startTime, c.resolvedTime!));
 
   const totalMinutesToday = durations.reduce((sum, d) => sum + d, 0);
   const avgDuration =
@@ -76,6 +81,6 @@ export async function GET() {
     mostFrequentCallType: maxTypeCount > 0 ? mostFrequentCallType : "—",
     busiestUnit: maxUnitCount > 0 ? busiestUnit : "—",
     userActiveCallId: userActiveCall?.id ?? null,
-    generatedAt: now.toISOString(),
+    generatedAt: toStoredISOString(),
   });
 }

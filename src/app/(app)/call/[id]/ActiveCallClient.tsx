@@ -9,9 +9,9 @@ import { SelectField } from "@/components/SelectField";
 import { CallTypeBadge } from "@/components/CallTypeBadge";
 import { Role } from "@prisma/client";
 import {
-  formatDateTime,
-  formatResponseTime,
-} from "@/lib/utils";
+  formatLocalDateTime,
+  formatDuration,
+} from "@/lib/datetime";
 
 interface Call {
   id: string;
@@ -168,7 +168,7 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
           {call.additionalNotes && (
             <InfoRow label="Additional Notes" value={call.additionalNotes} />
           )}
-          <InfoRow label="Call Start Time" value={formatDateTime(call.startTime)} />
+          <InfoRow label="Call Start Time" value={formatLocalDateTime(call.startTime)} />
         </div>
 
         <div className="bg-white rounded-2xl border border-border p-5 shadow-sm text-center">
@@ -193,11 +193,11 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
                 Response Time
               </p>
               <p className="font-mono text-4xl font-bold tracking-wider mt-2 tabular-nums">
-                {formatResponseTime(call.responseTimeSeconds)}
+                {formatDuration(call.responseTimeSeconds, "response")}
               </p>
               {call.teamArrivalTime && (
                 <p className="text-xs text-muted mt-2">
-                  Arrived {formatDateTime(call.teamArrivalTime)}
+                  Arrived {formatLocalDateTime(call.teamArrivalTime)}
                 </p>
               )}
             </div>

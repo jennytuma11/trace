@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { listResolvedMockCalls } from "@/lib/mock-calls";
-import { endOfDay, parseISO, startOfDay } from "date-fns";
+import {
+  getTimezoneFromSearchParams,
+  isInstantInLocalDateRange,
+} from "@/lib/datetime";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -16,16 +19,14 @@ export async function GET(request: NextRequest) {
   const outcomeId = searchParams.get("outcomeId");
   const userId = searchParams.get("userId");
   const search = searchParams.get("search")?.toLowerCase();
+  const timeZone = getTimezoneFromSearchParams(searchParams);
 
   let calls = listResolvedMockCalls();
 
-  if (startDate) {
-    const start = startOfDay(parseISO(startDate));
-    calls = calls.filter((call) => new Date(call.startTime) >= start);
-  }
-  if (endDate) {
-    const end = endOfDay(parseISO(endDate));
-    calls = calls.filter((call) => new Date(call.startTime) <= end);
+  if (startDate && endDate) {
+    calls = calls.filter((call) =>
+      isInstantInLocalDateRange(call.startTime, startDate, endDate, timeZone)
+    );
   }
   if (callTypeId) calls = calls.filter((call) => call.callTypeId === callTypeId);
   if (outcomeId) calls = calls.filter((call) => call.outcomeId === outcomeId);

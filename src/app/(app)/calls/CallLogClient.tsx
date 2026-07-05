@@ -6,12 +6,13 @@ import { ActionButton } from "@/components/ActionButton";
 import { CallTypeBadge } from "@/components/CallTypeBadge";
 import { Role } from "@prisma/client";
 import {
-  formatDateTime,
-  formatElapsedHMS,
-  formatResponseTime,
-  formatTime,
+  appendTimezoneParam,
+  formatDuration,
+  formatLocalDateTime,
+  formatLocalTime,
+  getUserTimezone,
   toISODateInput,
-} from "@/lib/utils";
+} from "@/lib/datetime";
 import { subDays } from "date-fns";
 
 interface Call {
@@ -45,8 +46,9 @@ export function CallLogClient({ user }: CallLogClientProps) {
   const [loading, setLoading] = useState(true);
 
   const today = new Date();
-  const [startDate, setStartDate] = useState(toISODateInput(subDays(today, 30)));
-  const [endDate, setEndDate] = useState(toISODateInput(today));
+  const timeZone = getUserTimezone();
+  const [startDate, setStartDate] = useState(toISODateInput(subDays(today, 30), timeZone));
+  const [endDate, setEndDate] = useState(toISODateInput(today, timeZone));
   const [callTypeId, setCallTypeId] = useState("");
   const [outcomeId, setOutcomeId] = useState("");
   const [userId, setUserId] = useState("");
@@ -61,12 +63,13 @@ export function CallLogClient({ user }: CallLogClientProps) {
     if (outcomeId) params.set("outcomeId", outcomeId);
     if (userId) params.set("userId", userId);
     if (search) params.set("search", search);
+    appendTimezoneParam(params, timeZone);
 
     const res = await fetch(`/api/calls?${params}`);
     const data = await res.json();
     setCalls(data.calls || []);
     setLoading(false);
-  }, [startDate, endDate, callTypeId, outcomeId, userId, search]);
+  }, [startDate, endDate, callTypeId, outcomeId, userId, search, timeZone]);
 
   useEffect(() => {
     fetch("/api/lookup").then((r) => r.json()).then(setLookup);
@@ -84,6 +87,7 @@ export function CallLogClient({ user }: CallLogClientProps) {
     if (outcomeId) params.set("outcomeId", outcomeId);
     if (userId) params.set("userId", userId);
     if (search) params.set("search", search);
+    appendTimezoneParam(params, timeZone);
     window.open(`/api/export?${params}`, "_blank");
   }
 
@@ -176,24 +180,26 @@ export function CallLogClient({ user }: CallLogClientProps) {
                       </td>
                       <td className="px-4 py-3">{call.unitLocation}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {formatDateTime(call.startTime)}
+                        {formatLocalDateTime(call.startTime, timeZone)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {call.teamArrivalTime
-                          ? formatDateTime(call.teamArrivalTime)
+                          ? formatLocalDateTime(call.teamArrivalTime, timeZone)
                           : "—"}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {call.responseTimeSeconds != null
-                          ? formatResponseTime(call.responseTimeSeconds)
+                          ? formatDuration(call.responseTimeSeconds, "response")
                           : "—"}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        {call.resolvedTime ? formatDateTime(call.resolvedTime) : "—"}
+                        {call.resolvedTime
+                          ? formatLocalDateTime(call.resolvedTime, timeZone)
+                          : "—"}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap font-mono">
                         {call.totalCallDurationSeconds != null
-                          ? formatElapsedHMS(call.totalCallDurationSeconds)
+                          ? formatDuration(call.totalCallDurationSeconds, "elapsed")
                           : "—"}
                       </td>
                       <td className="px-4 py-3">{call.outcome?.name ?? "—"}</td>
@@ -216,7 +222,7 @@ export function CallLogClient({ user }: CallLogClientProps) {
                       size="sm"
                     />
                     <p className="text-xs text-muted shrink-0">
-                      {formatTime(call.startTime)}
+                      {formatLocalTime(call.startTime, timeZone)}
                     </p>
                   </div>
                   <p className="text-sm font-medium">{call.unitLocation}</p>
@@ -230,7 +236,7 @@ export function CallLogClient({ user }: CallLogClientProps) {
                       label="Response"
                       value={
                         call.responseTimeSeconds != null
-                          ? formatResponseTime(call.responseTimeSeconds)
+                          ? formatDuration(call.responseTimeSeconds, "response")
                           : "—"
                       }
                     />
@@ -238,7 +244,7 @@ export function CallLogClient({ user }: CallLogClientProps) {
                       label="Total"
                       value={
                         call.totalCallDurationSeconds != null
-                          ? formatElapsedHMS(call.totalCallDurationSeconds)
+                          ? formatDuration(call.totalCallDurationSeconds, "elapsed")
                           : "—"
                       }
                     />
@@ -248,7 +254,11 @@ export function CallLogClient({ user }: CallLogClientProps) {
                     />
                     <HistoryStat
                       label="End"
-                      value={call.resolvedTime ? formatTime(call.resolvedTime) : "—"}
+                      value={
+                        call.resolvedTime
+                          ? formatLocalTime(call.resolvedTime, timeZone)
+                          : "—"
+                      }
                     />
                   </div>
                 </div>
