@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  TEAM_MEMBER
+}
+
+enum CallStatus {
+  ACTIVE
+  ENDED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         Role     @default(TEAM_MEMBER)
+  createdAt    DateTime @default(now()) @map("created_at")
+  calls        Call[]
+
+  @@map("users")
+}
+
+model Unit {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  active Boolean @default(true)
+  calls  Call[]
+
+  @@map("units")
+}
+
+model CallType {
+  id    String @id @default(cuid())
+  name  String @unique
+  calls Call[]
+
+  @@map("call_types")
+}
+
+model Outcome {
+  id    String @id @default(cuid())
+  name  String @unique
+  calls Call[]
+
+  @@map("outcomes")
+}
+
+model Call {
+  id              String     @id @default(cuid())
+  userId          String     @map("user_id")
+  unitId          String     @map("unit_id")
+  callTypeId      String     @map("call_type_id")
+  outcomeId       String?    @map("outcome_id")
+  pageReceivedAt  DateTime   @map("page_received_at")
+  arrivedAt       DateTime?  @map("arrived_at")
+  stabilizedAt    DateTime?  @map("stabilized_at")
+  endTime         DateTime?  @map("end_time")
+  status          CallStatus @default(ACTIVE)
+  notes           String?
+  createdAt       DateTime   @default(now()) @map("created_at")
+
+  user     User     @relation(fields: [userId], references: [id])
+  unit     Unit     @relation(fields: [unitId], references: [id])
+  callType CallType @relation(fields: [callTypeId], references: [id])
+  outcome  Outcome? @relation(fields: [outcomeId], references: [id])
+
+  @@index([status])
+  @@index([pageReceivedAt])
+  @@index([userId])
+  @@index([unitId])
+  @@index([callTypeId])
+  @@index([outcomeId])
+  @@map("calls")
+}
