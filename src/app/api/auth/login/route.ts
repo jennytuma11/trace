@@ -1,24 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/db";
 import { createSession, setSessionCookie } from "@/lib/auth";
+import { authenticateMockUser } from "@/lib/mock-auth";
 
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
 
     if (!email || !password) {
-      return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+      return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    const user = authenticateMockUser(email, password);
     if (!user) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-    }
-
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Invalid email or password. Use the demo credentials shown below." },
+        { status: 401 }
+      );
     }
 
     const token = await createSession({
@@ -34,6 +31,9 @@ export async function POST(request: NextRequest) {
     setSessionCookie(response, token);
     return response;
   } catch {
-    return NextResponse.json({ error: "Login failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Sign in failed. Please try again." },
+      { status: 500 }
+    );
   }
 }

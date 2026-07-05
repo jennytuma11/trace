@@ -12,10 +12,11 @@ export interface SessionUser {
 
 const COOKIE_NAME = "trace_session";
 
+// Hardcoded for mock auth — no environment variables required.
+const MOCK_JWT_SECRET = "trace-mock-session-secret";
+
 function getSecret() {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT_SECRET is not set");
-  return new TextEncoder().encode(secret);
+  return new TextEncoder().encode(MOCK_JWT_SECRET);
 }
 
 export async function createSession(user: SessionUser): Promise<string> {

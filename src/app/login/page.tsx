@@ -1,13 +1,13 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ActionButton } from "@/components/ActionButton";
+import { DEMO_PASSWORD } from "@/lib/mock-auth";
 
 function LoginForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState("member@trace.local");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,12 +26,11 @@ function LoginForm() {
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Login failed");
+        setError(data.error || "Invalid email or password.");
         return;
       }
 
-      const from = searchParams.get("from") || "/";
-      router.push(from);
+      router.push("/");
       router.refresh();
     } catch {
       setError("Unable to connect. Please try again.");
@@ -54,6 +53,23 @@ function LoginForm() {
           </p>
         </div>
 
+        <div className="mb-4 rounded-2xl border-2 border-primary/30 bg-teal-50 p-4">
+          <p className="text-sm font-semibold text-primary mb-2">Demo credentials</p>
+          <dl className="space-y-1 text-sm">
+            <div className="flex gap-2">
+              <dt className="font-medium text-muted w-20 shrink-0">Email</dt>
+              <dd className="font-mono">member@trace.local</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="font-medium text-muted w-20 shrink-0">Password</dt>
+              <dd className="font-mono">{DEMO_PASSWORD}</dd>
+            </div>
+          </dl>
+          <p className="text-xs text-muted mt-3">
+            Also works: admin@trace.local, manager@trace.local (same password)
+          </p>
+        </div>
+
         <form
           onSubmit={handleSubmit}
           className="bg-white rounded-2xl border border-border shadow-sm p-6 space-y-4"
@@ -73,7 +89,7 @@ function LoginForm() {
               required
               autoComplete="email"
               className="w-full px-4 py-3.5 rounded-xl border-2 border-border focus:border-primary transition-colors"
-              placeholder="you@hospital.org"
+              placeholder="member@trace.local"
             />
           </label>
 
@@ -86,6 +102,7 @@ function LoginForm() {
               required
               autoComplete="current-password"
               className="w-full px-4 py-3.5 rounded-xl border-2 border-border focus:border-primary transition-colors"
+              placeholder={DEMO_PASSWORD}
             />
           </label>
 
@@ -93,11 +110,6 @@ function LoginForm() {
             {loading ? "Signing in…" : "Sign in"}
           </ActionButton>
         </form>
-
-        <div className="mt-6 text-center text-xs text-muted space-y-1">
-          <p>Demo accounts (password: <code className="bg-white px-1 rounded">password123</code>)</p>
-          <p>admin@trace.local · manager@trace.local · member@trace.local</p>
-        </div>
       </div>
     </div>
   );
