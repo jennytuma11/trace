@@ -38,8 +38,10 @@ export async function GET(request: NextRequest) {
       (call) =>
         call.unit.name.toLowerCase().includes(search) ||
         call.callType.name.toLowerCase().includes(search) ||
+        (call.rapidResponseCategory?.name.toLowerCase().includes(search) ?? false) ||
         (call.outcome?.name.toLowerCase().includes(search) ?? false) ||
         call.user.name.toLowerCase().includes(search) ||
+        (call.detailsNotes?.toLowerCase().includes(search) ?? false) ||
         (call.notes?.toLowerCase().includes(search) ?? false)
     );
   }

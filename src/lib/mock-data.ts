@@ -23,12 +23,22 @@ export const MOCK_UNITS: MockLookupItem[] = [
 export const MOCK_CALL_TYPES: MockLookupItem[] = [
   { id: "type-rapid-response", name: "Rapid Response" },
   { id: "type-code-blue", name: "Code Blue" },
-  { id: "type-stroke-alert", name: "Stroke Alert" },
-  { id: "type-sepsis-alert", name: "Sepsis Alert" },
-  { id: "type-airway", name: "Airway Emergency" },
-  { id: "type-behavioral", name: "Behavioral Emergency" },
-  { id: "type-trauma", name: "Trauma" },
-  { id: "type-other", name: "Other" },
+];
+
+export const RAPID_RESPONSE_TYPE_ID = "type-rapid-response";
+export const CODE_BLUE_TYPE_ID = "type-code-blue";
+
+export const MOCK_RR_CATEGORIES: MockLookupItem[] = [
+  { id: "rr-sepsis", name: "Sepsis" },
+  { id: "rr-ams", name: "AMS" },
+  { id: "rr-stemi", name: "STEMI" },
+  { id: "rr-stroke", name: "STROKE" },
+  { id: "rr-respiratory-distress", name: "Respiratory Distress" },
+  { id: "rr-patient-deterioration", name: "Patient Deterioration Assessment" },
+  { id: "rr-critical-care-transport", name: "Critical Care Transport" },
+  { id: "rr-clinical-assistance", name: "Clinical Assistance" },
+  { id: "rr-mtp", name: "MTP" },
+  { id: "rr-airway-emergency", name: "Airway Emergency" },
 ];
 
 export const MOCK_OUTCOMES: MockLookupItem[] = [
@@ -44,6 +54,7 @@ export function getMockLookup() {
   return {
     units: MOCK_UNITS,
     callTypes: MOCK_CALL_TYPES,
+    rapidResponseCategories: MOCK_RR_CATEGORIES,
     outcomes: MOCK_OUTCOMES,
     users: MOCK_USERS.map(({ id, name, role }) => ({ id, name, role })),
   };
@@ -55,6 +66,10 @@ export function findMockUnit(id: string) {
 
 export function findMockCallType(id: string) {
   return MOCK_CALL_TYPES.find((t) => t.id === id) ?? null;
+}
+
+export function findMockRrCategory(id: string) {
+  return MOCK_RR_CATEGORIES.find((c) => c.id === id) ?? null;
 }
 
 export function findMockOutcome(id: string) {

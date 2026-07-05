@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { ActionButton } from "@/components/ActionButton";
 import { Role } from "@prisma/client";
 import {
+  formatCallTypeLabel,
   formatDate,
   formatDurationMinutes,
   formatTime,
@@ -18,6 +19,8 @@ interface Call {
   endTime: string | null;
   unit: { name: string };
   callType: { name: string };
+  rapidResponseCategory: { name: string } | null;
+  detailsNotes: string | null;
   outcome: { name: string } | null;
   user: { name: string };
 }
@@ -25,6 +28,7 @@ interface Call {
 interface LookupData {
   units: { id: string; name: string }[];
   callTypes: { id: string; name: string }[];
+  rapidResponseCategories: { id: string; name: string }[];
   outcomes: { id: string; name: string }[];
   users: { id: string; name: string }[];
 }
@@ -100,7 +104,7 @@ export function CallLogClient({ user }: CallLogClientProps) {
         <div className="bg-white rounded-2xl border border-border p-4 shadow-sm space-y-3">
           <input
             type="search"
-            placeholder="Search unit, type, outcome, team member…"
+            placeholder="Search unit, type, category, details, outcome, team member…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary"
@@ -156,6 +160,7 @@ export function CallLogClient({ user }: CallLogClientProps) {
                     <th className="px-4 py-3 font-semibold">Duration</th>
                     <th className="px-4 py-3 font-semibold">Unit</th>
                     <th className="px-4 py-3 font-semibold">Type</th>
+                    <th className="px-4 py-3 font-semibold">Details</th>
                     <th className="px-4 py-3 font-semibold">Outcome</th>
                     <th className="px-4 py-3 font-semibold">Team</th>
                   </tr>
@@ -174,7 +179,10 @@ export function CallLogClient({ user }: CallLogClientProps) {
                           : "—"}
                       </td>
                       <td className="px-4 py-3">{call.unit.name}</td>
-                      <td className="px-4 py-3">{call.callType.name}</td>
+                      <td className="px-4 py-3">{formatCallTypeLabel(call)}</td>
+                      <td className="px-4 py-3 max-w-xs truncate">
+                        {call.detailsNotes ?? "—"}
+                      </td>
                       <td className="px-4 py-3">{call.outcome?.name ?? "—"}</td>
                       <td className="px-4 py-3">{call.user.name}</td>
                     </tr>
@@ -190,12 +198,15 @@ export function CallLogClient({ user }: CallLogClientProps) {
                   className="bg-white rounded-2xl border border-border p-4 shadow-sm"
                 >
                   <div className="flex justify-between items-start gap-2 mb-2">
-                    <p className="font-semibold">{call.callType.name}</p>
+                    <p className="font-semibold">{formatCallTypeLabel(call)}</p>
                     <p className="text-xs text-muted shrink-0">
                       {formatDate(call.pageReceivedAt)}
                     </p>
                   </div>
                   <p className="text-sm text-muted">{call.unit.name}</p>
+                  {call.detailsNotes && (
+                    <p className="text-sm mt-2">{call.detailsNotes}</p>
+                  )}
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div>
                       <p className="text-xs text-muted">Time</p>

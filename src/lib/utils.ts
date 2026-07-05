@@ -84,6 +84,16 @@ export function escapeCsvField(value: string | null | undefined): string {
   return str;
 }
 
+export function formatCallTypeLabel(call: {
+  callType: { name: string };
+  rapidResponseCategory?: { name: string } | null;
+}): string {
+  if (call.rapidResponseCategory) {
+    return `${call.callType.name} — ${call.rapidResponseCategory.name}`;
+  }
+  return call.callType.name;
+}
+
 export const CHART_COLORS = [
   "#0d9488",
   "#0891b2",

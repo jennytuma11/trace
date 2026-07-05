@@ -7,7 +7,7 @@ import { CallTimer } from "@/components/CallTimer";
 import { ActionButton } from "@/components/ActionButton";
 import { SelectField } from "@/components/SelectField";
 import { Role } from "@prisma/client";
-import { formatDateTime, toDateTimeLocalInput } from "@/lib/utils";
+import { formatCallTypeLabel, formatDateTime, toDateTimeLocalInput } from "@/lib/utils";
 
 interface Call {
   id: string;
@@ -15,9 +15,11 @@ interface Call {
   arrivedAt: string | null;
   stabilizedAt: string | null;
   status: string;
+  detailsNotes: string | null;
   notes: string | null;
   unit: { id: string; name: string };
   callType: { id: string; name: string };
+  rapidResponseCategory: { id: string; name: string } | null;
   outcome: { id: string; name: string } | null;
   user: { id: string; name: string };
 }
@@ -152,8 +154,17 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
         <div className="bg-white rounded-2xl border border-border p-5 shadow-sm space-y-3">
           <InfoRow label="Status" value="Active" highlight />
           <InfoRow label="Page received" value={formatDateTime(call.pageReceivedAt)} />
-          <InfoRow label="Call type" value={call.callType.name} />
+          <InfoRow label="Call type" value={formatCallTypeLabel(call)} />
           <InfoRow label="Unit" value={call.unit.name} />
+          {call.rapidResponseCategory && (
+            <InfoRow
+              label="RR category"
+              value={call.rapidResponseCategory.name}
+            />
+          )}
+          {call.detailsNotes && (
+            <InfoRow label="Details" value={call.detailsNotes} />
+          )}
           {call.arrivedAt && (
             <InfoRow label="Arrived" value={formatDateTime(call.arrivedAt)} highlight />
           )}

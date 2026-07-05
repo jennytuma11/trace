@@ -22,7 +22,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { unitId, callTypeId } = await request.json();
+    const { unitId, callTypeId, rapidResponseCategoryId, detailsNotes } =
+      await request.json();
 
     if (!unitId && !callTypeId) {
       return NextResponse.json(
@@ -51,7 +52,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = createMockCall(session.id, unitId, callTypeId);
+    const result = createMockCall(session.id, {
+      unitId,
+      callTypeId,
+      rapidResponseCategoryId,
+      detailsNotes,
+    });
     if (result.error || !result.call) {
       console.error("[Trace] createMockCall failed:", result.error);
       return NextResponse.json(

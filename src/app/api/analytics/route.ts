@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { listEndedMockCalls } from "@/lib/mock-calls";
 import { getCallDurationMinutes } from "@/lib/utils";
 import { endOfDay, format, parseISO, startOfDay } from "date-fns";
 
@@ -14,25 +14,16 @@ export async function GET(request: NextRequest) {
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
 
-  const where: { status: "ENDED"; pageReceivedAt?: { gte: Date; lte: Date } } = {
-    status: "ENDED",
-  };
+  let calls = listEndedMockCalls();
 
   if (startDate && endDate) {
-    where.pageReceivedAt = {
-      gte: startOfDay(parseISO(startDate)),
-      lte: endOfDay(parseISO(endDate)),
-    };
+    const start = startOfDay(parseISO(startDate));
+    const end = endOfDay(parseISO(endDate));
+    calls = calls.filter((call) => {
+      const received = new Date(call.pageReceivedAt);
+      return received >= start && received <= end;
+    });
   }
-
-  const calls = await prisma.call.findMany({
-    where,
-    include: {
-      unit: true,
-      callType: true,
-      outcome: true,
-    },
-  });
 
   const callsByType: Record<string, number> = {};
   const callsByUnit: Record<string, number> = {};
@@ -44,24 +35,28 @@ export async function GET(request: NextRequest) {
   for (const call of calls) {
     if (!call.endTime) continue;
 
-    callsByType[call.callType.name] = (callsByType[call.callType.name] || 0) + 1;
+    const typeLabel = call.callType.name;
+    callsByType[typeLabel] = (callsByType[typeLabel] || 0) + 1;
     callsByUnit[call.unit.name] = (callsByUnit[call.unit.name] || 0) + 1;
 
-    const hour = call.pageReceivedAt.getHours();
+    const hour = new Date(call.pageReceivedAt).getHours();
     callsByHour[hour] = (callsByHour[hour] || 0) + 1;
 
-    const duration = getCallDurationMinutes(call.pageReceivedAt, call.endTime);
-    if (!durationByType[call.callType.name]) {
-      durationByType[call.callType.name] = { total: 0, count: 0 };
+    const duration = getCallDurationMinutes(
+      new Date(call.pageReceivedAt),
+      new Date(call.endTime)
+    );
+    if (!durationByType[typeLabel]) {
+      durationByType[typeLabel] = { total: 0, count: 0 };
     }
-    durationByType[call.callType.name].total += duration;
-    durationByType[call.callType.name].count += 1;
+    durationByType[typeLabel].total += duration;
+    durationByType[typeLabel].count += 1;
 
     if (call.outcome) {
       outcomes[call.outcome.name] = (outcomes[call.outcome.name] || 0) + 1;
     }
 
-    const dayKey = format(call.pageReceivedAt, "yyyy-MM-dd");
+    const dayKey = format(new Date(call.pageReceivedAt), "yyyy-MM-dd");
     teamTimeByDay[dayKey] = (teamTimeByDay[dayKey] || 0) + duration;
   }
 

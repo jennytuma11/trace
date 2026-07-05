@@ -1,8 +1,11 @@
 import {
+  CODE_BLUE_TYPE_ID,
   findMockCallType,
   findMockOutcome,
+  findMockRrCategory,
   findMockUnit,
   findMockUser,
+  RAPID_RESPONSE_TYPE_ID,
 } from "@/lib/mock-data";
 
 export type MockCallStatus = "ACTIVE" | "ENDED";
@@ -12,12 +15,14 @@ export interface MockCallRecord {
   userId: string;
   unitId: string;
   callTypeId: string;
+  rapidResponseCategoryId: string | null;
   outcomeId: string | null;
   pageReceivedAt: Date;
   arrivedAt: Date | null;
   stabilizedAt: Date | null;
   endTime: Date | null;
   status: MockCallStatus;
+  detailsNotes: string | null;
   notes: string | null;
 }
 
@@ -26,17 +31,27 @@ export interface SerializedMockCall {
   userId: string;
   unitId: string;
   callTypeId: string;
+  rapidResponseCategoryId: string | null;
   outcomeId: string | null;
   pageReceivedAt: string;
   arrivedAt: string | null;
   stabilizedAt: string | null;
   endTime: string | null;
   status: MockCallStatus;
+  detailsNotes: string | null;
   notes: string | null;
   unit: { id: string; name: string };
   callType: { id: string; name: string };
+  rapidResponseCategory: { id: string; name: string } | null;
   outcome: { id: string; name: string } | null;
   user: { id: string; name: string };
+}
+
+export interface CreateMockCallInput {
+  unitId: string;
+  callTypeId: string;
+  rapidResponseCategoryId?: string | null;
+  detailsNotes?: string | null;
 }
 
 const globalForCalls = globalThis as unknown as {
@@ -57,21 +72,27 @@ function serializeCall(call: MockCallRecord): SerializedMockCall | null {
   if (!unit || !callType || !user) return null;
 
   const outcome = call.outcomeId ? findMockOutcome(call.outcomeId) : null;
+  const rapidResponseCategory = call.rapidResponseCategoryId
+    ? findMockRrCategory(call.rapidResponseCategoryId)
+    : null;
 
   return {
     id: call.id,
     userId: call.userId,
     unitId: call.unitId,
     callTypeId: call.callTypeId,
+    rapidResponseCategoryId: call.rapidResponseCategoryId,
     outcomeId: call.outcomeId,
     pageReceivedAt: call.pageReceivedAt.toISOString(),
     arrivedAt: call.arrivedAt?.toISOString() ?? null,
     stabilizedAt: call.stabilizedAt?.toISOString() ?? null,
     endTime: call.endTime?.toISOString() ?? null,
     status: call.status,
+    detailsNotes: call.detailsNotes,
     notes: call.notes,
     unit,
     callType,
+    rapidResponseCategory,
     outcome,
     user,
   };
@@ -95,9 +116,10 @@ export function getCallById(id: string): SerializedMockCall | null {
 
 export function createMockCall(
   userId: string,
-  unitId: string,
-  callTypeId: string
+  input: CreateMockCallInput
 ): { call?: SerializedMockCall; error?: string } {
+  const { unitId, callTypeId, rapidResponseCategoryId, detailsNotes } = input;
+
   if (!findMockUnit(unitId)) {
     return { error: "Invalid unit selected." };
   }
@@ -108,10 +130,24 @@ export function createMockCall(
     return { error: "Invalid user session." };
   }
 
+  let categoryId: string | null = rapidResponseCategoryId?.trim() || null;
+
+  if (callTypeId === CODE_BLUE_TYPE_ID) {
+    categoryId = null;
+  } else if (callTypeId === RAPID_RESPONSE_TYPE_ID) {
+    if (categoryId && !findMockRrCategory(categoryId)) {
+      return { error: "Invalid Rapid Response category selected." };
+    }
+  } else if (categoryId) {
+    return { error: "Rapid Response category is only valid for Rapid Response calls." };
+  }
+
   const existing = getActiveCallForUser(userId);
   if (existing) {
     return { error: "You already have an active call", call: existing };
   }
+
+  const trimmedDetails = detailsNotes?.trim() || null;
 
   const id = `call-${crypto.randomUUID()}`;
   const record: MockCallRecord = {
@@ -119,12 +155,14 @@ export function createMockCall(
     userId,
     unitId,
     callTypeId,
+    rapidResponseCategoryId: categoryId,
     outcomeId: null,
     pageReceivedAt: new Date(),
     arrivedAt: null,
     stabilizedAt: null,
     endTime: null,
     status: "ACTIVE",
+    detailsNotes: trimmedDetails,
     notes: null,
   };
 
@@ -196,7 +234,7 @@ export function endMockCall(
 
   call.endTime = end;
   call.outcomeId = outcomeId;
-  call.notes = notes || null;
+  call.notes = notes?.trim() || null;
   call.status = "ENDED";
   store.set(id, call);
 
