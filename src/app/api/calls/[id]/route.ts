@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import {
-  endMockCall,
   getCallById,
-  updateMockCallAction,
+  recordTeamArrival,
+  resolveMockCall,
 } from "@/lib/mock-calls";
 
 export async function GET(
@@ -39,23 +39,20 @@ export async function PATCH(
     const body = await request.json();
     const { action } = body;
 
-    if (!action) {
-      return NextResponse.json({ error: "Action required" }, { status: 400 });
+    if (action !== "team_arrived") {
+      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
-    const result = updateMockCallAction(id, action);
+    const result = recordTeamArrival(id);
     if (result.error || !result.call) {
-      console.error("[Trace] updateMockCallAction failed:", result.error);
+      console.error("[Trace] recordTeamArrival failed:", result.error);
       return NextResponse.json(
-        { error: result.error || "Action failed" },
+        { error: result.error || "Failed to record team arrival" },
         { status: result.error === "Call not found" ? 404 : 400 }
       );
     }
 
-    return NextResponse.json({
-      call: result.call,
-      suggestedOutcome: result.suggestedOutcome ?? null,
-    });
+    return NextResponse.json({ call: result.call });
   } catch (error) {
     console.error("[Trace] PATCH /api/calls/[id] failed:", error);
     return NextResponse.json({ error: "Action failed" }, { status: 500 });
@@ -73,17 +70,20 @@ export async function PUT(
 
   try {
     const { id } = await params;
-    const { endTime, outcomeId, notes } = await request.json();
+    const { outcomeId, resolutionNotes } = await request.json();
 
-    if (!endTime || !outcomeId) {
-      return NextResponse.json({ error: "End time and outcome required" }, { status: 400 });
+    if (!outcomeId) {
+      return NextResponse.json(
+        { error: "Outcome is required before resolving the call." },
+        { status: 400 }
+      );
     }
 
-    const result = endMockCall(id, endTime, outcomeId, notes);
+    const result = resolveMockCall(id, { outcomeId, resolutionNotes });
     if (result.error || !result.call) {
-      console.error("[Trace] endMockCall failed:", result.error);
+      console.error("[Trace] resolveMockCall failed:", result.error);
       return NextResponse.json(
-        { error: result.error || "Failed to end call" },
+        { error: result.error || "Failed to resolve call" },
         { status: result.error === "Call not found" ? 404 : 400 }
       );
     }
@@ -91,6 +91,6 @@ export async function PUT(
     return NextResponse.json({ call: result.call });
   } catch (error) {
     console.error("[Trace] PUT /api/calls/[id] failed:", error);
-    return NextResponse.json({ error: "Failed to end call" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to resolve call" }, { status: 500 });
   }
 }

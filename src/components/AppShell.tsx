@@ -12,7 +12,7 @@ interface AppShellProps {
 const navItems = [
   { href: "/", label: "Dashboard", icon: "📊" },
   { href: "/call/start", label: "Start Call", icon: "🚨" },
-  { href: "/calls", label: "Call Log", icon: "📋" },
+  { href: "/calls", label: "Call History", icon: "📋" },
   { href: "/analytics", label: "Analytics", icon: "📈" },
 ];
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { listEndedMockCalls } from "@/lib/mock-calls";
+import { listResolvedMockCalls } from "@/lib/mock-calls";
 import { endOfDay, parseISO, startOfDay } from "date-fns";
 
 export async function GET(request: NextRequest) {
@@ -12,23 +12,21 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
-  const unitId = searchParams.get("unitId");
   const callTypeId = searchParams.get("callTypeId");
   const outcomeId = searchParams.get("outcomeId");
   const userId = searchParams.get("userId");
   const search = searchParams.get("search")?.toLowerCase();
 
-  let calls = listEndedMockCalls();
+  let calls = listResolvedMockCalls();
 
   if (startDate) {
     const start = startOfDay(parseISO(startDate));
-    calls = calls.filter((call) => new Date(call.pageReceivedAt) >= start);
+    calls = calls.filter((call) => new Date(call.startTime) >= start);
   }
   if (endDate) {
     const end = endOfDay(parseISO(endDate));
-    calls = calls.filter((call) => new Date(call.pageReceivedAt) <= end);
+    calls = calls.filter((call) => new Date(call.startTime) <= end);
   }
-  if (unitId) calls = calls.filter((call) => call.unitId === unitId);
   if (callTypeId) calls = calls.filter((call) => call.callTypeId === callTypeId);
   if (outcomeId) calls = calls.filter((call) => call.outcomeId === outcomeId);
   if (userId) calls = calls.filter((call) => call.userId === userId);
@@ -36,13 +34,13 @@ export async function GET(request: NextRequest) {
   if (search) {
     calls = calls.filter(
       (call) =>
-        call.unit.name.toLowerCase().includes(search) ||
+        call.unitLocation.toLowerCase().includes(search) ||
         call.callType.name.toLowerCase().includes(search) ||
         (call.rapidResponseCategory?.name.toLowerCase().includes(search) ?? false) ||
         (call.outcome?.name.toLowerCase().includes(search) ?? false) ||
         call.user.name.toLowerCase().includes(search) ||
-        (call.detailsNotes?.toLowerCase().includes(search) ?? false) ||
-        (call.notes?.toLowerCase().includes(search) ?? false)
+        (call.additionalNotes?.toLowerCase().includes(search) ?? false) ||
+        (call.resolutionNotes?.toLowerCase().includes(search) ?? false)
     );
   }
 

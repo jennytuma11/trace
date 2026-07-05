@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { listEndedMockCalls } from "@/lib/mock-calls";
+import { listResolvedMockCalls } from "@/lib/mock-calls";
 import { getCallDurationMinutes } from "@/lib/utils";
 import { endOfDay, format, parseISO, startOfDay } from "date-fns";
 
@@ -14,13 +14,13 @@ export async function GET(request: NextRequest) {
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
 
-  let calls = listEndedMockCalls();
+  let calls = listResolvedMockCalls();
 
   if (startDate && endDate) {
     const start = startOfDay(parseISO(startDate));
     const end = endOfDay(parseISO(endDate));
     calls = calls.filter((call) => {
-      const received = new Date(call.pageReceivedAt);
+      const received = new Date(call.startTime);
       return received >= start && received <= end;
     });
   }
@@ -33,19 +33,16 @@ export async function GET(request: NextRequest) {
   const teamTimeByDay: Record<string, number> = {};
 
   for (const call of calls) {
-    if (!call.endTime) continue;
+    if (!call.resolvedTime) continue;
 
     const typeLabel = call.callType.name;
     callsByType[typeLabel] = (callsByType[typeLabel] || 0) + 1;
-    callsByUnit[call.unit.name] = (callsByUnit[call.unit.name] || 0) + 1;
+    callsByUnit[call.unitLocation] = (callsByUnit[call.unitLocation] || 0) + 1;
 
-    const hour = new Date(call.pageReceivedAt).getHours();
+    const hour = new Date(call.startTime).getHours();
     callsByHour[hour] = (callsByHour[hour] || 0) + 1;
 
-    const duration = getCallDurationMinutes(
-      new Date(call.pageReceivedAt),
-      new Date(call.endTime)
-    );
+    const duration = getCallDurationMinutes(call.startTime, call.resolvedTime);
     if (!durationByType[typeLabel]) {
       durationByType[typeLabel] = { total: 0, count: 0 };
     }
@@ -56,7 +53,7 @@ export async function GET(request: NextRequest) {
       outcomes[call.outcome.name] = (outcomes[call.outcome.name] || 0) + 1;
     }
 
-    const dayKey = format(new Date(call.pageReceivedAt), "yyyy-MM-dd");
+    const dayKey = format(new Date(call.startTime), "yyyy-MM-dd");
     teamTimeByDay[dayKey] = (teamTimeByDay[dayKey] || 0) + duration;
   }
 

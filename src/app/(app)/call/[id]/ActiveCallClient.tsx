@@ -6,27 +6,27 @@ import { AppShell } from "@/components/AppShell";
 import { CallTimer } from "@/components/CallTimer";
 import { ActionButton } from "@/components/ActionButton";
 import { SelectField } from "@/components/SelectField";
+import { CallTypeBadge } from "@/components/CallTypeBadge";
 import { Role } from "@prisma/client";
-import { formatCallTypeLabel, formatDateTime, toDateTimeLocalInput } from "@/lib/utils";
+import {
+  formatDateTime,
+  formatResponseTime,
+} from "@/lib/utils";
 
 interface Call {
   id: string;
-  pageReceivedAt: string;
-  arrivedAt: string | null;
-  stabilizedAt: string | null;
   status: string;
-  detailsNotes: string | null;
-  notes: string | null;
-  unit: { id: string; name: string };
+  callTypeId: string;
   callType: { id: string; name: string };
   rapidResponseCategory: { id: string; name: string } | null;
-  outcome: { id: string; name: string } | null;
-  user: { id: string; name: string };
+  unitLocation: string;
+  additionalNotes: string | null;
+  startTime: string;
+  teamArrivalTime: string | null;
+  responseTimeSeconds: number | null;
 }
 
 interface LookupData {
-  units: { id: string; name: string }[];
-  callTypes: { id: string; name: string }[];
   outcomes: { id: string; name: string }[];
 }
 
@@ -39,72 +39,65 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
   const router = useRouter();
   const [call, setCall] = useState<Call | null>(null);
   const [lookup, setLookup] = useState<LookupData | null>(null);
-  const [showEndForm, setShowEndForm] = useState(false);
-  const [endTime, setEndTime] = useState("");
   const [outcomeId, setOutcomeId] = useState("");
-  const [notes, setNotes] = useState("");
+  const [resolutionNotes, setResolutionNotes] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [arrivalLoading, setArrivalLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/calls/${callId}`).then((r) => r.json()),
       fetch("/api/lookup").then((r) => r.json()),
-    ]).then(([callData, lookupData]) => {
-      if (callData.call) {
-        setCall(callData.call);
-        if (callData.call.status === "ENDED") {
-          router.push("/calls");
-          return;
+    ])
+      .then(([callData, lookupData]) => {
+        if (callData.call) {
+          if (callData.call.status === "RESOLVED") {
+            router.push("/calls");
+            return;
+          }
+          setCall(callData.call);
+        } else {
+          console.error("[Trace] Active call not found:", callData);
+          setError("Active call not found. It may have expired — please start a new call.");
         }
-        setEndTime(toDateTimeLocalInput(new Date()));
-      } else {
-        console.error("[Trace] Active call not found:", callData);
-        setError("Active call not found. It may have expired — please start a new call.");
-      }
-      setLookup(lookupData);
-    }).catch((err) => {
-      console.error("[Trace] Failed to load active call:", err);
-      setError("Unable to load active call. Please try again.");
-    });
+        setLookup(lookupData);
+      })
+      .catch((err) => {
+        console.error("[Trace] Failed to load active call:", err);
+        setError("Unable to load active call. Please try again.");
+      });
   }, [callId, router]);
 
-  async function performAction(action: string) {
-    setActionLoading(action);
+  async function handleTeamArrived() {
+    setArrivalLoading(true);
     setError("");
 
     try {
       const res = await fetch(`/api/calls/${callId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action: "team_arrived" }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Action failed");
+        setError(data.error || "Failed to record team arrival");
         return;
       }
 
       setCall(data.call);
-
-      if (action === "icu_transfer" || action === "cancelled") {
-        const suggested = lookup?.outcomes.find((o) => o.name === data.suggestedOutcome);
-        if (suggested) setOutcomeId(suggested.id);
-        setShowEndForm(true);
-      }
-    } catch {
-      setError("Action failed. Please try again.");
+    } catch (err) {
+      console.error("[Trace] Team arrival failed:", err);
+      setError("Failed to record team arrival. Please try again.");
     } finally {
-      setActionLoading(null);
+      setArrivalLoading(false);
     }
   }
 
-  async function handleEndCall(e: React.FormEvent) {
-    e.preventDefault();
-    if (!endTime || !outcomeId) {
-      setError("End time and outcome are required");
+  async function handleResolveCall() {
+    if (!outcomeId) {
+      setError("Please select an outcome before resolving the call.");
       return;
     }
 
@@ -115,18 +108,19 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
       const res = await fetch(`/api/calls/${callId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endTime, outcomeId, notes }),
+        body: JSON.stringify({ outcomeId, resolutionNotes }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Failed to end call");
+        setError(data.error || "Failed to resolve call");
         return;
       }
 
       router.push("/calls");
-    } catch {
-      setError("Failed to end call. Please try again.");
+    } catch (err) {
+      console.error("[Trace] Resolve call failed:", err);
+      setError("Failed to resolve call. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -135,7 +129,13 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
   if (!call) {
     return (
       <AppShell user={user}>
-        <div className="h-64 rounded-2xl bg-white border border-border animate-pulse" />
+        {error ? (
+          <div className="bg-red-50 text-danger text-sm px-4 py-3 rounded-xl border border-red-200">
+            {error}
+          </div>
+        ) : (
+          <div className="h-64 rounded-2xl bg-white border border-border animate-pulse" />
+        )}
       </AppShell>
     );
   }
@@ -143,135 +143,120 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
   return (
     <AppShell user={user}>
       <div className="space-y-6 max-w-lg mx-auto">
-        <div className="text-center">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-2xl font-bold">Active Call</h2>
           <span className="inline-block px-3 py-1 rounded-full bg-teal-100 text-primary text-xs font-semibold uppercase tracking-wide">
-            Status: Active
+            Active
           </span>
-          <p className="text-sm font-medium text-primary uppercase tracking-wide mt-3">Active Call</p>
-          <CallTimer startTime={call.pageReceivedAt} className="mt-3" />
         </div>
 
         <div className="bg-white rounded-2xl border border-border p-5 shadow-sm space-y-3">
-          <InfoRow label="Status" value="Active" highlight />
-          <InfoRow label="Page received" value={formatDateTime(call.pageReceivedAt)} />
-          <InfoRow label="Call type" value={formatCallTypeLabel(call)} />
-          <InfoRow label="Unit" value={call.unit.name} />
+          <InfoRow
+            label="Call Type"
+            value={
+              <CallTypeBadge
+                callTypeId={call.callTypeId}
+                callTypeName={call.callType.name}
+                size="sm"
+              />
+            }
+          />
           {call.rapidResponseCategory && (
-            <InfoRow
-              label="RR category"
-              value={call.rapidResponseCategory.name}
-            />
+            <InfoRow label="RR Category" value={call.rapidResponseCategory.name} />
           )}
-          {call.detailsNotes && (
-            <InfoRow label="Details" value={call.detailsNotes} />
+          <InfoRow label="Unit / Location" value={call.unitLocation} />
+          {call.additionalNotes && (
+            <InfoRow label="Additional Notes" value={call.additionalNotes} />
           )}
-          {call.arrivedAt && (
-            <InfoRow label="Arrived" value={formatDateTime(call.arrivedAt)} highlight />
-          )}
-          {call.stabilizedAt && (
-            <InfoRow label="Stabilized" value={formatDateTime(call.stabilizedAt)} highlight />
+          <InfoRow label="Call Start Time" value={formatDateTime(call.startTime)} />
+        </div>
+
+        <div className="bg-white rounded-2xl border border-border p-5 shadow-sm text-center">
+          <CallTimer
+            startTime={call.startTime}
+            format="hms"
+            label="Total Time on Call"
+          />
+        </div>
+
+        <div className="bg-white rounded-2xl border border-border p-5 shadow-sm space-y-4">
+          <div>
+            <h3 className="font-semibold text-lg">Team Arrival</h3>
+            <p className="text-sm text-muted mt-1">
+              Record when the rapid response team arrives on scene.
+            </p>
+          </div>
+
+          {call.responseTimeSeconds != null ? (
+            <div className="rounded-xl bg-background border border-border p-4 text-center">
+              <p className="text-sm font-medium text-muted uppercase tracking-wide">
+                Response Time
+              </p>
+              <p className="font-mono text-4xl font-bold tracking-wider mt-2 tabular-nums">
+                {formatResponseTime(call.responseTimeSeconds)}
+              </p>
+              {call.teamArrivalTime && (
+                <p className="text-xs text-muted mt-2">
+                  Arrived {formatDateTime(call.teamArrivalTime)}
+                </p>
+              )}
+            </div>
+          ) : (
+            <ActionButton
+              size="xl"
+              variant="success"
+              onClick={handleTeamArrived}
+              disabled={arrivalLoading}
+            >
+              {arrivalLoading ? "Recording…" : "Team Arrived"}
+            </ActionButton>
           )}
         </div>
 
-        {error && (
-          <div className="bg-red-50 text-danger text-sm px-4 py-3 rounded-xl border border-red-200">
-            {error}
-          </div>
-        )}
+        <div className="bg-white rounded-2xl border border-border p-5 shadow-sm space-y-4">
+          <h3 className="font-semibold text-lg">Resolve Call</h3>
 
-        {!showEndForm ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <ActionButton
-              variant="success"
-              onClick={() => performAction("arrived")}
-              disabled={!!actionLoading || !!call.arrivedAt}
-            >
-              {call.arrivedAt ? "Arrived ✓" : actionLoading === "arrived" ? "…" : "Arrived"}
-            </ActionButton>
-            <ActionButton
-              variant="success"
-              onClick={() => performAction("stabilized")}
-              disabled={!!actionLoading || !!call.stabilizedAt}
-            >
-              {call.stabilizedAt
-                ? "Stabilized ✓"
-                : actionLoading === "stabilized"
-                  ? "…"
-                  : "Patient stabilized"}
-            </ActionButton>
-            <ActionButton
-              variant="warning"
-              onClick={() => performAction("icu_transfer")}
-              disabled={!!actionLoading}
-            >
-              ICU transfer
-            </ActionButton>
-            <ActionButton
-              variant="ghost"
-              onClick={() => performAction("cancelled")}
-              disabled={!!actionLoading}
-            >
-              Cancelled
-            </ActionButton>
-            <div className="sm:col-span-2">
-              <ActionButton variant="danger" onClick={() => setShowEndForm(true)}>
-                End call
-              </ActionButton>
+          {lookup && (
+            <SelectField
+              label="Outcome *"
+              options={lookup.outcomes}
+              value={outcomeId}
+              onChange={(e) => {
+                setOutcomeId(e.target.value);
+                if (error) setError("");
+              }}
+              required
+            />
+          )}
+
+          <label className="block">
+            <span className="block text-sm font-medium mb-2">
+              Resolution Notes (Optional)
+            </span>
+            <textarea
+              value={resolutionNotes}
+              onChange={(e) => setResolutionNotes(e.target.value)}
+              rows={3}
+              placeholder="Operational notes only — no PHI"
+              className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary resize-none"
+            />
+          </label>
+
+          {error && (
+            <div className="bg-red-50 text-danger text-sm px-4 py-3 rounded-xl border border-red-200">
+              {error}
             </div>
-          </div>
-        ) : (
-          <form
-            onSubmit={handleEndCall}
-            className="bg-white rounded-2xl border-2 border-primary p-5 shadow-sm space-y-4"
+          )}
+
+          <ActionButton
+            size="xl"
+            variant="danger"
+            onClick={handleResolveCall}
+            disabled={loading || !outcomeId}
           >
-            <h3 className="font-semibold text-lg">End Call</h3>
-
-            <label className="block">
-              <span className="block text-sm font-medium mb-2">End time *</span>
-              <input
-                type="datetime-local"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                required
-                className="w-full px-4 py-3.5 rounded-xl border-2 border-border focus:border-primary"
-              />
-            </label>
-
-            {lookup && (
-              <SelectField
-                label="Final outcome *"
-                options={lookup.outcomes}
-                value={outcomeId}
-                onChange={(e) => setOutcomeId(e.target.value)}
-                required
-              />
-            )}
-
-            <label className="block">
-              <span className="block text-sm font-medium mb-2">Notes (optional)</span>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                placeholder="Operational notes only — no PHI"
-                className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary resize-none"
-              />
-            </label>
-
-            <div className="grid grid-cols-2 gap-3">
-              <ActionButton
-                type="button"
-                variant="ghost"
-                onClick={() => setShowEndForm(false)}
-              >
-                Back
-              </ActionButton>
-              <ActionButton type="submit" variant="danger" disabled={loading}>
-                {loading ? "Saving…" : "Complete"}
-              </ActionButton>
-            </div>
-          </form>
-        )}
+            {loading ? "Resolving…" : "Resolve Call"}
+          </ActionButton>
+        </div>
       </div>
     </AppShell>
   );
@@ -280,18 +265,14 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
 function InfoRow({
   label,
   value,
-  highlight,
 }: {
   label: string;
-  value: string;
-  highlight?: boolean;
+  value: React.ReactNode;
 }) {
   return (
     <div className="flex justify-between items-start gap-4">
       <span className="text-sm text-muted shrink-0">{label}</span>
-      <span className={`text-sm font-medium text-right ${highlight ? "text-success" : ""}`}>
-        {value}
-      </span>
+      <span className="text-sm font-medium text-right">{value}</span>
     </div>
   );
 }

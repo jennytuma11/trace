@@ -12,6 +12,12 @@
   --muted: #64748b;
   --border: #cbd5e1;
   --success: #059669;
+  --rapid-response: #dc2626;
+  --rapid-response-dark: #b91c1c;
+  --rapid-response-bg: #fef2f2;
+  --code-blue: #2563eb;
+  --code-blue-dark: #1d4ed8;
+  --code-blue-bg: #eff6ff;
 }
 
 @theme inline {
@@ -26,6 +32,12 @@
   --color-muted: var(--muted);
   --color-border: var(--border);
   --color-success: var(--success);
+  --color-rapid-response: var(--rapid-response);
+  --color-rapid-response-dark: var(--rapid-response-dark);
+  --color-rapid-response-bg: var(--rapid-response-bg);
+  --color-code-blue: var(--code-blue);
+  --color-code-blue-dark: var(--code-blue-dark);
+  --color-code-blue-bg: var(--code-blue-bg);
   --font-sans: var(--font-geist-sans);
 }
 

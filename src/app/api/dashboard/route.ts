@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import {
   countActiveMockCalls,
   getActiveCallForUser,
-  listEndedMockCalls,
+  listResolvedMockCalls,
 } from "@/lib/mock-calls";
 import { getCallDurationMinutes, getTodayRange, getWeekRange } from "@/lib/utils";
 
@@ -17,20 +17,20 @@ export async function GET() {
   const { start: todayStart, end: todayEnd } = getTodayRange();
   const { start: weekStart, end: weekEnd } = getWeekRange();
 
-  const endedCalls = listEndedMockCalls();
-  const todayCalls = endedCalls.filter((call) => {
-    const received = new Date(call.pageReceivedAt);
+  const resolvedCalls = listResolvedMockCalls();
+  const todayCalls = resolvedCalls.filter((call) => {
+    const received = new Date(call.startTime);
     return received >= todayStart && received <= todayEnd;
   });
-  const weekCalls = endedCalls.filter((call) => {
-    const received = new Date(call.pageReceivedAt);
+  const weekCalls = resolvedCalls.filter((call) => {
+    const received = new Date(call.startTime);
     return received >= weekStart && received <= weekEnd;
   });
 
   const durations = todayCalls
-    .filter((c) => c.endTime)
+    .filter((c) => c.resolvedTime)
     .map((c) =>
-      getCallDurationMinutes(new Date(c.pageReceivedAt), new Date(c.endTime!))
+      getCallDurationMinutes(c.startTime, c.resolvedTime!)
     );
 
   const totalMinutesToday = durations.reduce((sum, d) => sum + d, 0);
@@ -44,7 +44,7 @@ export async function GET() {
 
   const unitCounts: Record<string, number> = {};
   for (const call of todayCalls) {
-    unitCounts[call.unit.name] = (unitCounts[call.unit.name] || 0) + 1;
+    unitCounts[call.unitLocation] = (unitCounts[call.unitLocation] || 0) + 1;
   }
 
   let mostFrequentCallType = "—";

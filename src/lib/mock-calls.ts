@@ -1,57 +1,62 @@
 import {
-  CODE_BLUE_TYPE_ID,
   findMockCallType,
   findMockOutcome,
   findMockRrCategory,
-  findMockUnit,
   findMockUser,
-  RAPID_RESPONSE_TYPE_ID,
+  isCodeBlueType,
+  isRapidResponseType,
 } from "@/lib/mock-data";
 
-export type MockCallStatus = "ACTIVE" | "ENDED";
+export type CallStatus = "ACTIVE" | "RESOLVED";
 
 export interface MockCallRecord {
   id: string;
   userId: string;
-  unitId: string;
   callTypeId: string;
   rapidResponseCategoryId: string | null;
+  unitLocation: string;
+  additionalNotes: string | null;
+  startTime: Date;
+  teamArrivalTime: Date | null;
+  responseTimeSeconds: number | null;
+  resolvedTime: Date | null;
+  totalCallDurationSeconds: number | null;
   outcomeId: string | null;
-  pageReceivedAt: Date;
-  arrivedAt: Date | null;
-  stabilizedAt: Date | null;
-  endTime: Date | null;
-  status: MockCallStatus;
-  detailsNotes: string | null;
-  notes: string | null;
+  resolutionNotes: string | null;
+  status: CallStatus;
 }
 
 export interface SerializedMockCall {
   id: string;
   userId: string;
-  unitId: string;
+  status: CallStatus;
   callTypeId: string;
-  rapidResponseCategoryId: string | null;
-  outcomeId: string | null;
-  pageReceivedAt: string;
-  arrivedAt: string | null;
-  stabilizedAt: string | null;
-  endTime: string | null;
-  status: MockCallStatus;
-  detailsNotes: string | null;
-  notes: string | null;
-  unit: { id: string; name: string };
   callType: { id: string; name: string };
+  rapidResponseCategoryId: string | null;
   rapidResponseCategory: { id: string; name: string } | null;
+  unitLocation: string;
+  additionalNotes: string | null;
+  startTime: string;
+  teamArrivalTime: string | null;
+  responseTimeSeconds: number | null;
+  resolvedTime: string | null;
+  totalCallDurationSeconds: number | null;
+  outcomeId: string | null;
   outcome: { id: string; name: string } | null;
+  resolutionNotes: string | null;
   user: { id: string; name: string };
 }
 
 export interface CreateMockCallInput {
-  unitId: string;
   callTypeId: string;
+  unitLocation: string;
   rapidResponseCategoryId?: string | null;
-  detailsNotes?: string | null;
+  additionalNotes?: string | null;
+}
+
+export interface ResolveMockCallInput {
+  outcomeId: string;
+  resolutionNotes?: string | null;
 }
 
 const globalForCalls = globalThis as unknown as {
@@ -65,11 +70,14 @@ function getStore(): Map<string, MockCallRecord> {
   return globalForCalls.mockCallStore;
 }
 
+function computeDurationSeconds(start: Date, end: Date): number {
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+}
+
 function serializeCall(call: MockCallRecord): SerializedMockCall | null {
-  const unit = findMockUnit(call.unitId);
   const callType = findMockCallType(call.callTypeId);
   const user = findMockUser(call.userId);
-  if (!unit || !callType || !user) return null;
+  if (!callType || !user) return null;
 
   const outcome = call.outcomeId ? findMockOutcome(call.outcomeId) : null;
   const rapidResponseCategory = call.rapidResponseCategoryId
@@ -79,28 +87,27 @@ function serializeCall(call: MockCallRecord): SerializedMockCall | null {
   return {
     id: call.id,
     userId: call.userId,
-    unitId: call.unitId,
-    callTypeId: call.callTypeId,
-    rapidResponseCategoryId: call.rapidResponseCategoryId,
-    outcomeId: call.outcomeId,
-    pageReceivedAt: call.pageReceivedAt.toISOString(),
-    arrivedAt: call.arrivedAt?.toISOString() ?? null,
-    stabilizedAt: call.stabilizedAt?.toISOString() ?? null,
-    endTime: call.endTime?.toISOString() ?? null,
     status: call.status,
-    detailsNotes: call.detailsNotes,
-    notes: call.notes,
-    unit,
+    callTypeId: call.callTypeId,
     callType,
+    rapidResponseCategoryId: call.rapidResponseCategoryId,
     rapidResponseCategory,
+    unitLocation: call.unitLocation,
+    additionalNotes: call.additionalNotes,
+    startTime: call.startTime.toISOString(),
+    teamArrivalTime: call.teamArrivalTime?.toISOString() ?? null,
+    responseTimeSeconds: call.responseTimeSeconds,
+    resolvedTime: call.resolvedTime?.toISOString() ?? null,
+    totalCallDurationSeconds: call.totalCallDurationSeconds,
+    outcomeId: call.outcomeId,
     outcome,
+    resolutionNotes: call.resolutionNotes,
     user,
   };
 }
 
 export function getActiveCallForUser(userId: string): SerializedMockCall | null {
-  const store = getStore();
-  for (const call of store.values()) {
+  for (const call of getStore().values()) {
     if (call.userId === userId && call.status === "ACTIVE") {
       return serializeCall(call);
     }
@@ -118,13 +125,14 @@ export function createMockCall(
   userId: string,
   input: CreateMockCallInput
 ): { call?: SerializedMockCall; error?: string } {
-  const { unitId, callTypeId, rapidResponseCategoryId, detailsNotes } = input;
+  const { callTypeId, unitLocation, rapidResponseCategoryId, additionalNotes } = input;
 
-  if (!findMockUnit(unitId)) {
-    return { error: "Invalid unit selected." };
+  const trimmedLocation = unitLocation?.trim();
+  if (!trimmedLocation) {
+    return { error: "Unit / location is required." };
   }
   if (!findMockCallType(callTypeId)) {
-    return { error: "Invalid call type selected." };
+    return { error: "Please select a call type." };
   }
   if (!findMockUser(userId)) {
     return { error: "Invalid user session." };
@@ -132,9 +140,9 @@ export function createMockCall(
 
   let categoryId: string | null = rapidResponseCategoryId?.trim() || null;
 
-  if (callTypeId === CODE_BLUE_TYPE_ID) {
+  if (isCodeBlueType(callTypeId)) {
     categoryId = null;
-  } else if (callTypeId === RAPID_RESPONSE_TYPE_ID) {
+  } else if (isRapidResponseType(callTypeId)) {
     if (categoryId && !findMockRrCategory(categoryId)) {
       return { error: "Invalid Rapid Response category selected." };
     }
@@ -147,113 +155,88 @@ export function createMockCall(
     return { error: "You already have an active call", call: existing };
   }
 
-  const trimmedDetails = detailsNotes?.trim() || null;
-
   const id = `call-${crypto.randomUUID()}`;
   const record: MockCallRecord = {
     id,
     userId,
-    unitId,
     callTypeId,
     rapidResponseCategoryId: categoryId,
+    unitLocation: trimmedLocation,
+    additionalNotes: additionalNotes?.trim() || null,
+    startTime: new Date(),
+    teamArrivalTime: null,
+    responseTimeSeconds: null,
+    resolvedTime: null,
+    totalCallDurationSeconds: null,
     outcomeId: null,
-    pageReceivedAt: new Date(),
-    arrivedAt: null,
-    stabilizedAt: null,
-    endTime: null,
+    resolutionNotes: null,
     status: "ACTIVE",
-    detailsNotes: trimmedDetails,
-    notes: null,
   };
 
   getStore().set(id, record);
   const call = serializeCall(record);
-  if (!call) {
-    return { error: "Failed to create call." };
-  }
+  if (!call) return { error: "Failed to create call." };
   return { call };
 }
 
-export function updateMockCallAction(
-  id: string,
-  action: string
-): { call?: SerializedMockCall; suggestedOutcome?: string | null; error?: string } {
-  const store = getStore();
-  const call = store.get(id);
-  if (!call) return { error: "Call not found" };
-  if (call.status !== "ACTIVE") return { error: "Call is not active" };
-
-  switch (action) {
-    case "arrived":
-      if (!call.arrivedAt) call.arrivedAt = new Date();
-      break;
-    case "stabilized":
-      if (!call.stabilizedAt) call.stabilizedAt = new Date();
-      break;
-    case "icu_transfer":
-    case "cancelled":
-      break;
-    default:
-      return { error: "Invalid action" };
-  }
-
-  store.set(id, call);
-  const serialized = serializeCall(call);
-  if (!serialized) return { error: "Failed to update call." };
-
-  return {
-    call: serialized,
-    suggestedOutcome:
-      action === "icu_transfer"
-        ? "Transferred to ICU"
-        : action === "cancelled"
-          ? "Cancelled page"
-          : null,
-  };
-}
-
-export function endMockCall(
-  id: string,
-  endTime: string,
-  outcomeId: string,
-  notes?: string | null
+export function recordTeamArrival(
+  id: string
 ): { call?: SerializedMockCall; error?: string } {
   const store = getStore();
   const call = store.get(id);
   if (!call) return { error: "Call not found" };
   if (call.status !== "ACTIVE") return { error: "Call is not active" };
-  if (!findMockOutcome(outcomeId)) return { error: "Invalid outcome selected." };
+  if (call.teamArrivalTime) return { error: "Team arrival already recorded" };
 
-  const end = new Date(endTime);
-  if (Number.isNaN(end.getTime())) {
-    return { error: "Invalid end time." };
-  }
-  if (end < call.pageReceivedAt) {
-    return { error: "End time must be after page received time" };
-  }
-
-  call.endTime = end;
-  call.outcomeId = outcomeId;
-  call.notes = notes?.trim() || null;
-  call.status = "ENDED";
+  const arrival = new Date();
+  call.teamArrivalTime = arrival;
+  call.responseTimeSeconds = computeDurationSeconds(call.startTime, arrival);
   store.set(id, call);
 
   const serialized = serializeCall(call);
-  if (!serialized) return { error: "Failed to end call." };
+  if (!serialized) return { error: "Failed to record team arrival." };
   return { call: serialized };
 }
 
-export function listEndedMockCalls() {
+export function resolveMockCall(
+  id: string,
+  input: ResolveMockCallInput
+): { call?: SerializedMockCall; error?: string } {
+  const store = getStore();
+  const call = store.get(id);
+  if (!call) return { error: "Call not found" };
+  if (call.status !== "ACTIVE") return { error: "Call is not active" };
+  if (!input.outcomeId) return { error: "Outcome is required before resolving the call." };
+  if (!findMockOutcome(input.outcomeId)) {
+    return { error: "Invalid outcome selected." };
+  }
+
+  const resolved = new Date();
+  call.resolvedTime = resolved;
+  call.totalCallDurationSeconds = computeDurationSeconds(call.startTime, resolved);
+  call.outcomeId = input.outcomeId;
+  call.resolutionNotes = input.resolutionNotes?.trim() || null;
+  call.status = "RESOLVED";
+  store.set(id, call);
+
+  const serialized = serializeCall(call);
+  if (!serialized) return { error: "Failed to resolve call." };
+  return { call: serialized };
+}
+
+export function listResolvedMockCalls() {
   return Array.from(getStore().values())
-    .filter((call) => call.status === "ENDED")
+    .filter((call) => call.status === "RESOLVED")
     .map((call) => serializeCall(call))
     .filter((call): call is SerializedMockCall => call !== null)
     .sort(
-      (a, b) =>
-        new Date(b.pageReceivedAt).getTime() - new Date(a.pageReceivedAt).getTime()
+      (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
     );
 }
 
 export function countActiveMockCalls() {
   return Array.from(getStore().values()).filter((call) => call.status === "ACTIVE").length;
 }
+
+// Backward-compatible alias used by API routes
+export const listEndedMockCalls = listResolvedMockCalls;

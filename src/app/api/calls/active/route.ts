@@ -22,18 +22,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { unitId, callTypeId, rapidResponseCategoryId, detailsNotes } =
+    const { unitLocation, callTypeId, rapidResponseCategoryId, additionalNotes } =
       await request.json();
 
-    if (!unitId && !callTypeId) {
+    if (!unitLocation?.trim() && !callTypeId) {
       return NextResponse.json(
-        { error: "Please select a unit and call type before starting." },
+        { error: "Please enter a unit / location and select a call type." },
         { status: 400 }
       );
     }
-    if (!unitId) {
+    if (!unitLocation?.trim()) {
       return NextResponse.json(
-        { error: "Please select a unit / location before starting." },
+        { error: "Unit / location is required." },
         { status: 400 }
       );
     }
@@ -53,10 +53,10 @@ export async function POST(request: NextRequest) {
     }
 
     const result = createMockCall(session.id, {
-      unitId,
       callTypeId,
+      unitLocation,
       rapidResponseCategoryId,
-      detailsNotes,
+      additionalNotes,
     });
     if (result.error || !result.call) {
       console.error("[Trace] createMockCall failed:", result.error);

@@ -41,6 +41,26 @@ export function formatDurationSeconds(totalSeconds: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+export function formatElapsedHMS(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+export function formatResponseTime(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+export function getDurationSeconds(start: Date | string, end: Date | string): number {
+  return Math.max(
+    0,
+    Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000)
+  );
+}
+
 export function getTodayRange() {
   const now = new Date();
   return { start: startOfDay(now), end: endOfDay(now) };
@@ -67,12 +87,12 @@ export function parseDateTimeLocal(value: string): Date {
 }
 
 export function getCallDurationMinutes(
-  pageReceivedAt: Date,
-  endTime: Date | null,
+  startTime: Date | string,
+  endTime: Date | string | null,
   now: Date = new Date()
 ): number {
   const end = endTime ?? now;
-  return Math.max(0, differenceInMinutes(end, pageReceivedAt));
+  return Math.max(0, differenceInMinutes(new Date(end), new Date(startTime)));
 }
 
 export function escapeCsvField(value: string | null | undefined): string {

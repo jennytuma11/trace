@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { SelectField } from "@/components/SelectField";
 import { ActionButton } from "@/components/ActionButton";
+import { getCallTypeButtonClasses } from "@/components/CallTypeBadge";
 import { Role } from "@prisma/client";
 import {
   CODE_BLUE_TYPE_ID,
@@ -12,7 +13,6 @@ import {
 } from "@/lib/mock-data";
 
 interface LookupData {
-  units: { id: string; name: string }[];
   callTypes: { id: string; name: string }[];
   rapidResponseCategories: { id: string; name: string }[];
 }
@@ -25,7 +25,6 @@ function isValidLookup(data: unknown): data is LookupData {
   if (!data || typeof data !== "object") return false;
   const record = data as Record<string, unknown>;
   return (
-    Array.isArray(record.units) &&
     Array.isArray(record.callTypes) &&
     Array.isArray(record.rapidResponseCategories)
   );
@@ -34,10 +33,10 @@ function isValidLookup(data: unknown): data is LookupData {
 export function StartCallClient({ user }: StartCallClientProps) {
   const router = useRouter();
   const [lookup, setLookup] = useState<LookupData | null>(null);
-  const [unitId, setUnitId] = useState("");
+  const [unitLocation, setUnitLocation] = useState("");
   const [callTypeId, setCallTypeId] = useState("");
   const [rrCategoryId, setRrCategoryId] = useState("");
-  const [detailsNotes, setDetailsNotes] = useState("");
+  const [additionalNotes, setAdditionalNotes] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
@@ -85,12 +84,12 @@ export function StartCallClient({ user }: StartCallClientProps) {
   }
 
   async function handleStart() {
-    if (!unitId && !callTypeId) {
-      setError("Please select a unit and call type before starting.");
+    if (!unitLocation.trim() && !callTypeId) {
+      setError("Please enter a unit / location and select a call type.");
       return;
     }
-    if (!unitId) {
-      setError("Please select a unit / location before starting.");
+    if (!unitLocation.trim()) {
+      setError("Unit / location is required.");
       return;
     }
     if (!callTypeId) {
@@ -106,10 +105,10 @@ export function StartCallClient({ user }: StartCallClientProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          unitId,
+          unitLocation: unitLocation.trim(),
           callTypeId,
           rapidResponseCategoryId: isRapidResponse ? rrCategoryId || null : null,
-          detailsNotes: detailsNotes.trim() || null,
+          additionalNotes: additionalNotes.trim() || null,
         }),
       });
 
@@ -163,16 +162,6 @@ export function StartCallClient({ user }: StartCallClientProps) {
 
         {lookup ? (
           <div className="space-y-4 bg-white rounded-2xl border border-border p-5 shadow-sm">
-            <SelectField
-              label="Unit / Location"
-              options={lookup.units}
-              value={unitId}
-              onChange={(e) => {
-                setUnitId(e.target.value);
-                if (error) setError("");
-              }}
-            />
-
             <div>
               <span className="block text-sm font-medium text-foreground mb-2">
                 Call Type
@@ -183,11 +172,7 @@ export function StartCallClient({ user }: StartCallClientProps) {
                     key={type.id}
                     type="button"
                     onClick={() => selectCallType(type.id)}
-                    className={`px-4 py-4 text-base rounded-xl border-2 font-medium transition-colors ${
-                      callTypeId === type.id
-                        ? "border-primary bg-teal-50 text-primary"
-                        : "border-border bg-white hover:bg-background"
-                    }`}
+                    className={`px-4 py-5 text-base rounded-2xl border-2 font-semibold transition-colors ${getCallTypeButtonClasses(type.id, callTypeId === type.id)}`}
                   >
                     {type.name}
                   </button>
@@ -206,11 +191,31 @@ export function StartCallClient({ user }: StartCallClientProps) {
 
             <label className="block">
               <span className="block text-sm font-medium text-foreground mb-2">
+                Unit / Location
+              </span>
+              <input
+                type="text"
+                value={unitLocation}
+                onChange={(e) => {
+                  setUnitLocation(e.target.value);
+                  if (error) setError("");
+                }}
+                required
+                placeholder="Enter unit, room, or location..."
+                className="w-full px-4 py-3.5 text-base rounded-xl border-2 border-border bg-white focus:border-primary transition-colors"
+              />
+              <p className="text-xs text-muted mt-2">
+                e.g. 5 South, ICU Room 12, ED Trauma 2, Cath Lab
+              </p>
+            </label>
+
+            <label className="block">
+              <span className="block text-sm font-medium text-foreground mb-2">
                 Additional Notes / Details
               </span>
               <textarea
-                value={detailsNotes}
-                onChange={(e) => setDetailsNotes(e.target.value)}
+                value={additionalNotes}
+                onChange={(e) => setAdditionalNotes(e.target.value)}
                 rows={3}
                 placeholder="Operational details only — no PHI"
                 className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary resize-none"
