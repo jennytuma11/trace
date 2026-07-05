@@ -57,8 +57,14 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
           return;
         }
         setEndTime(toDateTimeLocalInput(new Date()));
+      } else {
+        console.error("[Trace] Active call not found:", callData);
+        setError("Active call not found. It may have expired — please start a new call.");
       }
       setLookup(lookupData);
+    }).catch((err) => {
+      console.error("[Trace] Failed to load active call:", err);
+      setError("Unable to load active call. Please try again.");
     });
   }, [callId, router]);
 
@@ -136,11 +142,15 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
     <AppShell user={user}>
       <div className="space-y-6 max-w-lg mx-auto">
         <div className="text-center">
-          <p className="text-sm font-medium text-primary uppercase tracking-wide">Active Call</p>
+          <span className="inline-block px-3 py-1 rounded-full bg-teal-100 text-primary text-xs font-semibold uppercase tracking-wide">
+            Status: Active
+          </span>
+          <p className="text-sm font-medium text-primary uppercase tracking-wide mt-3">Active Call</p>
           <CallTimer startTime={call.pageReceivedAt} className="mt-3" />
         </div>
 
         <div className="bg-white rounded-2xl border border-border p-5 shadow-sm space-y-3">
+          <InfoRow label="Status" value="Active" highlight />
           <InfoRow label="Page received" value={formatDateTime(call.pageReceivedAt)} />
           <InfoRow label="Call type" value={call.callType.name} />
           <InfoRow label="Unit" value={call.unit.name} />

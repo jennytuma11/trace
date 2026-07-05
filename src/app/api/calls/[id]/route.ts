@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import {
+  endMockCall,
+  getCallById,
+  updateMockCallAction,
+} from "@/lib/mock-calls";
 
 export async function GET(
   _request: NextRequest,
@@ -12,15 +16,7 @@ export async function GET(
   }
 
   const { id } = await params;
-  const call = await prisma.call.findUnique({
-    where: { id },
-    include: {
-      unit: true,
-      callType: true,
-      outcome: true,
-      user: { select: { id: true, name: true } },
-    },
-  });
+  const call = getCallById(id);
 
   if (!call) {
     return NextResponse.json({ error: "Call not found" }, { status: 404 });
@@ -38,61 +34,32 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = await params;
-  const call = await prisma.call.findUnique({ where: { id } });
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const { action } = body;
 
-  if (!call) {
-    return NextResponse.json({ error: "Call not found" }, { status: 404 });
+    if (!action) {
+      return NextResponse.json({ error: "Action required" }, { status: 400 });
+    }
+
+    const result = updateMockCallAction(id, action);
+    if (result.error || !result.call) {
+      console.error("[Trace] updateMockCallAction failed:", result.error);
+      return NextResponse.json(
+        { error: result.error || "Action failed" },
+        { status: result.error === "Call not found" ? 404 : 400 }
+      );
+    }
+
+    return NextResponse.json({
+      call: result.call,
+      suggestedOutcome: result.suggestedOutcome ?? null,
+    });
+  } catch (error) {
+    console.error("[Trace] PATCH /api/calls/[id] failed:", error);
+    return NextResponse.json({ error: "Action failed" }, { status: 500 });
   }
-
-  if (call.status !== "ACTIVE") {
-    return NextResponse.json({ error: "Call is not active" }, { status: 400 });
-  }
-
-  const body = await request.json();
-  const { action, unitId, callTypeId } = body;
-
-  const data: Record<string, unknown> = {};
-
-  if (unitId) data.unitId = unitId;
-  if (callTypeId) data.callTypeId = callTypeId;
-
-  switch (action) {
-    case "arrived":
-      if (!call.arrivedAt) data.arrivedAt = new Date();
-      break;
-    case "stabilized":
-      if (!call.stabilizedAt) data.stabilizedAt = new Date();
-      break;
-    case "icu_transfer":
-    case "cancelled":
-      break;
-    default:
-      if (action) {
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-      }
-  }
-
-  const updated = await prisma.call.update({
-    where: { id },
-    data,
-    include: {
-      unit: true,
-      callType: true,
-      outcome: true,
-      user: { select: { id: true, name: true } },
-    },
-  });
-
-  return NextResponse.json({
-    call: updated,
-    suggestedOutcome:
-      action === "icu_transfer"
-        ? "Transferred to ICU"
-        : action === "cancelled"
-          ? "Cancelled page"
-          : null,
-  });
 }
 
 export async function PUT(
@@ -104,43 +71,26 @@ export async function PUT(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = await params;
-  const call = await prisma.call.findUnique({ where: { id } });
+  try {
+    const { id } = await params;
+    const { endTime, outcomeId, notes } = await request.json();
 
-  if (!call) {
-    return NextResponse.json({ error: "Call not found" }, { status: 404 });
+    if (!endTime || !outcomeId) {
+      return NextResponse.json({ error: "End time and outcome required" }, { status: 400 });
+    }
+
+    const result = endMockCall(id, endTime, outcomeId, notes);
+    if (result.error || !result.call) {
+      console.error("[Trace] endMockCall failed:", result.error);
+      return NextResponse.json(
+        { error: result.error || "Failed to end call" },
+        { status: result.error === "Call not found" ? 404 : 400 }
+      );
+    }
+
+    return NextResponse.json({ call: result.call });
+  } catch (error) {
+    console.error("[Trace] PUT /api/calls/[id] failed:", error);
+    return NextResponse.json({ error: "Failed to end call" }, { status: 500 });
   }
-
-  if (call.status !== "ACTIVE") {
-    return NextResponse.json({ error: "Call is not active" }, { status: 400 });
-  }
-
-  const { endTime, outcomeId, notes } = await request.json();
-
-  if (!endTime || !outcomeId) {
-    return NextResponse.json({ error: "End time and outcome required" }, { status: 400 });
-  }
-
-  const end = new Date(endTime);
-  if (end < call.pageReceivedAt) {
-    return NextResponse.json({ error: "End time must be after page received time" }, { status: 400 });
-  }
-
-  const updated = await prisma.call.update({
-    where: { id },
-    data: {
-      endTime: end,
-      outcomeId,
-      notes: notes || null,
-      status: "ENDED",
-    },
-    include: {
-      unit: true,
-      callType: true,
-      outcome: true,
-      user: { select: { id: true, name: true } },
-    },
-  });
-
-  return NextResponse.json({ call: updated });
 }

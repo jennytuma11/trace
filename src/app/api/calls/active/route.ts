@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import {
+  createMockCall,
+  getActiveCallForUser,
+} from "@/lib/mock-calls";
 
 export async function GET() {
   const session = await getSession();
@@ -8,16 +11,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const activeCall = await prisma.call.findFirst({
-    where: { userId: session.id, status: "ACTIVE" },
-    include: {
-      unit: true,
-      callType: true,
-      user: { select: { id: true, name: true } },
-    },
-    orderBy: { pageReceivedAt: "desc" },
-  });
-
+  const activeCall = getActiveCallForUser(session.id);
   return NextResponse.json({ activeCall });
 }
 
@@ -27,36 +21,48 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const existing = await prisma.call.findFirst({
-    where: { userId: session.id, status: "ACTIVE" },
-  });
+  try {
+    const { unitId, callTypeId } = await request.json();
 
-  if (existing) {
-    return NextResponse.json(
-      { error: "You already have an active call", callId: existing.id },
-      { status: 409 }
-    );
+    if (!unitId && !callTypeId) {
+      return NextResponse.json(
+        { error: "Please select a unit and call type before starting." },
+        { status: 400 }
+      );
+    }
+    if (!unitId) {
+      return NextResponse.json(
+        { error: "Please select a unit / location before starting." },
+        { status: 400 }
+      );
+    }
+    if (!callTypeId) {
+      return NextResponse.json(
+        { error: "Please select a call type before starting." },
+        { status: 400 }
+      );
+    }
+
+    const existing = getActiveCallForUser(session.id);
+    if (existing) {
+      return NextResponse.json(
+        { error: "You already have an active call", callId: existing.id },
+        { status: 409 }
+      );
+    }
+
+    const result = createMockCall(session.id, unitId, callTypeId);
+    if (result.error || !result.call) {
+      console.error("[Trace] createMockCall failed:", result.error);
+      return NextResponse.json(
+        { error: result.error || "Failed to start call." },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({ call: result.call }, { status: 201 });
+  } catch (error) {
+    console.error("[Trace] POST /api/calls/active failed:", error);
+    return NextResponse.json({ error: "Failed to start call." }, { status: 500 });
   }
-
-  const { unitId, callTypeId } = await request.json();
-  if (!unitId || !callTypeId) {
-    return NextResponse.json({ error: "Unit and call type required" }, { status: 400 });
-  }
-
-  const call = await prisma.call.create({
-    data: {
-      userId: session.id,
-      unitId,
-      callTypeId,
-      pageReceivedAt: new Date(),
-      status: "ACTIVE",
-    },
-    include: {
-      unit: true,
-      callType: true,
-      user: { select: { id: true, name: true } },
-    },
-  });
-
-  return NextResponse.json({ call }, { status: 201 });
 }

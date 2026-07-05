@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { getMockLookup } from "@/lib/mock-data";
 
 export async function GET() {
   const session = await getSession();
@@ -8,15 +8,5 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [units, callTypes, outcomes, users] = await Promise.all([
-    prisma.unit.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-    prisma.callType.findMany({ orderBy: { name: "asc" } }),
-    prisma.outcome.findMany({ orderBy: { name: "asc" } }),
-    prisma.user.findMany({
-      select: { id: true, name: true, role: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
-
-  return NextResponse.json({ units, callTypes, outcomes, users });
+  return NextResponse.json(getMockLookup());
 }

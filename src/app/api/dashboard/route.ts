@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import {
+  countActiveMockCalls,
+  getActiveCallForUser,
+  listEndedMockCalls,
+} from "@/lib/mock-calls";
 import { getCallDurationMinutes, getTodayRange, getWeekRange } from "@/lib/utils";
 
 export async function GET() {
@@ -13,26 +17,21 @@ export async function GET() {
   const { start: todayStart, end: todayEnd } = getTodayRange();
   const { start: weekStart, end: weekEnd } = getWeekRange();
 
-  const [todayCalls, activeCalls, weekCalls] = await Promise.all([
-    prisma.call.findMany({
-      where: {
-        pageReceivedAt: { gte: todayStart, lte: todayEnd },
-        status: "ENDED",
-      },
-      include: { callType: true, unit: true },
-    }),
-    prisma.call.count({ where: { status: "ACTIVE" } }),
-    prisma.call.count({
-      where: {
-        pageReceivedAt: { gte: weekStart, lte: weekEnd },
-        status: "ENDED",
-      },
-    }),
-  ]);
+  const endedCalls = listEndedMockCalls();
+  const todayCalls = endedCalls.filter((call) => {
+    const received = new Date(call.pageReceivedAt);
+    return received >= todayStart && received <= todayEnd;
+  });
+  const weekCalls = endedCalls.filter((call) => {
+    const received = new Date(call.pageReceivedAt);
+    return received >= weekStart && received <= weekEnd;
+  });
 
   const durations = todayCalls
     .filter((c) => c.endTime)
-    .map((c) => getCallDurationMinutes(c.pageReceivedAt, c.endTime));
+    .map((c) =>
+      getCallDurationMinutes(new Date(c.pageReceivedAt), new Date(c.endTime!))
+    );
 
   const totalMinutesToday = durations.reduce((sum, d) => sum + d, 0);
   const avgDuration =
@@ -66,17 +65,14 @@ export async function GET() {
     }
   }
 
-  const userActiveCall = await prisma.call.findFirst({
-    where: { userId: session.id, status: "ACTIVE" },
-    select: { id: true },
-  });
+  const userActiveCall = getActiveCallForUser(session.id);
 
   return NextResponse.json({
     totalCallsToday: todayCalls.length,
-    activeCalls,
+    activeCalls: countActiveMockCalls(),
     avgDurationMinutes: avgDuration,
     totalMinutesToday,
-    callsThisWeek: weekCalls,
+    callsThisWeek: weekCalls.length,
     mostFrequentCallType: maxTypeCount > 0 ? mostFrequentCallType : "—",
     busiestUnit: maxUnitCount > 0 ? busiestUnit : "—",
     userActiveCallId: userActiveCall?.id ?? null,

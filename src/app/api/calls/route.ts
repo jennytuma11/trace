@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { listEndedMockCalls } from "@/lib/mock-calls";
 import { endOfDay, parseISO, startOfDay } from "date-fns";
 
 export async function GET(request: NextRequest) {
@@ -17,41 +16,33 @@ export async function GET(request: NextRequest) {
   const callTypeId = searchParams.get("callTypeId");
   const outcomeId = searchParams.get("outcomeId");
   const userId = searchParams.get("userId");
-  const search = searchParams.get("search");
+  const search = searchParams.get("search")?.toLowerCase();
 
-  const where: Prisma.CallWhereInput = { status: "ENDED" };
+  let calls = listEndedMockCalls();
 
-  if (startDate || endDate) {
-    where.pageReceivedAt = {};
-    if (startDate) where.pageReceivedAt.gte = startOfDay(parseISO(startDate));
-    if (endDate) where.pageReceivedAt.lte = endOfDay(parseISO(endDate));
+  if (startDate) {
+    const start = startOfDay(parseISO(startDate));
+    calls = calls.filter((call) => new Date(call.pageReceivedAt) >= start);
   }
-
-  if (unitId) where.unitId = unitId;
-  if (callTypeId) where.callTypeId = callTypeId;
-  if (outcomeId) where.outcomeId = outcomeId;
-  if (userId) where.userId = userId;
+  if (endDate) {
+    const end = endOfDay(parseISO(endDate));
+    calls = calls.filter((call) => new Date(call.pageReceivedAt) <= end);
+  }
+  if (unitId) calls = calls.filter((call) => call.unitId === unitId);
+  if (callTypeId) calls = calls.filter((call) => call.callTypeId === callTypeId);
+  if (outcomeId) calls = calls.filter((call) => call.outcomeId === outcomeId);
+  if (userId) calls = calls.filter((call) => call.userId === userId);
 
   if (search) {
-    where.OR = [
-      { unit: { name: { contains: search } } },
-      { callType: { name: { contains: search } } },
-      { outcome: { name: { contains: search } } },
-      { user: { name: { contains: search } } },
-      { notes: { contains: search } },
-    ];
+    calls = calls.filter(
+      (call) =>
+        call.unit.name.toLowerCase().includes(search) ||
+        call.callType.name.toLowerCase().includes(search) ||
+        (call.outcome?.name.toLowerCase().includes(search) ?? false) ||
+        call.user.name.toLowerCase().includes(search) ||
+        (call.notes?.toLowerCase().includes(search) ?? false)
+    );
   }
-
-  const calls = await prisma.call.findMany({
-    where,
-    include: {
-      unit: true,
-      callType: true,
-      outcome: true,
-      user: { select: { id: true, name: true } },
-    },
-    orderBy: { pageReceivedAt: "desc" },
-  });
 
   return NextResponse.json({ calls });
 }

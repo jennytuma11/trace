@@ -16,6 +16,12 @@ interface StartCallClientProps {
   user: { name: string; role: Role };
 }
 
+function isValidLookup(data: unknown): data is LookupData {
+  if (!data || typeof data !== "object") return false;
+  const record = data as Record<string, unknown>;
+  return Array.isArray(record.units) && Array.isArray(record.callTypes);
+}
+
 export function StartCallClient({ user }: StartCallClientProps) {
   const router = useRouter();
   const [lookup, setLookup] = useState<LookupData | null>(null);
@@ -27,19 +33,47 @@ export function StartCallClient({ user }: StartCallClientProps) {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/lookup").then((r) => r.json()),
-      fetch("/api/calls/active").then((r) => r.json()),
-    ]).then(([lookupData, activeData]) => {
-      setLookup(lookupData);
-      if (activeData.activeCall) {
-        setActiveCallId(activeData.activeCall.id);
-      }
-    });
+      fetch("/api/lookup").then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "Failed to load lookup data");
+        if (!isValidLookup(data)) throw new Error("Invalid lookup data received");
+        return data;
+      }),
+      fetch("/api/calls/active").then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "Failed to check active call");
+        return data;
+      }),
+    ])
+      .then(([lookupData, activeData]) => {
+        setLookup(lookupData);
+        if (activeData.activeCall?.id) {
+          setActiveCallId(activeData.activeCall.id);
+        }
+      })
+      .catch((err) => {
+        console.error("[Trace] Failed to load start call data:", err);
+        setError("Unable to load units and call types. Please refresh and try again.");
+      });
   }, []);
 
+  useEffect(() => {
+    if (activeCallId) {
+      router.push(`/call/${activeCallId}`);
+    }
+  }, [activeCallId, router]);
+
   async function handleStart() {
-    if (!unitId || !callTypeId) {
-      setError("Please select unit and call type");
+    if (!unitId && !callTypeId) {
+      setError("Please select a unit and call type before starting.");
+      return;
+    }
+    if (!unitId) {
+      setError("Please select a unit / location before starting.");
+      return;
+    }
+    if (!callTypeId) {
+      setError("Please select a call type before starting.");
       return;
     }
 
@@ -59,12 +93,20 @@ export function StartCallClient({ user }: StartCallClientProps) {
           router.push(`/call/${data.callId}`);
           return;
         }
-        setError(data.error || "Failed to start call");
+        console.error("[Trace] Start call failed:", data.error || res.status);
+        setError(data.error || "Failed to start call. Please try again.");
+        return;
+      }
+
+      if (!data.call?.id) {
+        console.error("[Trace] Start call returned no call id:", data);
+        setError("Call started but navigation failed. Please refresh and try again.");
         return;
       }
 
       router.push(`/call/${data.call.id}`);
-    } catch {
+    } catch (err) {
+      console.error("[Trace] Failed to start call:", err);
       setError("Unable to start call. Please try again.");
     } finally {
       setLoading(false);
@@ -72,8 +114,11 @@ export function StartCallClient({ user }: StartCallClientProps) {
   }
 
   if (activeCallId) {
-    router.push(`/call/${activeCallId}`);
-    return null;
+    return (
+      <AppShell user={user}>
+        <div className="text-center py-12 text-muted">Redirecting to active call…</div>
+      </AppShell>
+    );
   }
 
   return (
@@ -96,20 +141,30 @@ export function StartCallClient({ user }: StartCallClientProps) {
               label="Unit / Location"
               options={lookup.units}
               value={unitId}
-              onChange={(e) => setUnitId(e.target.value)}
+              onChange={(e) => {
+                setUnitId(e.target.value);
+                if (error) setError("");
+              }}
             />
             <SelectField
               label="Call Type"
               options={lookup.callTypes}
               value={callTypeId}
-              onChange={(e) => setCallTypeId(e.target.value)}
+              onChange={(e) => {
+                setCallTypeId(e.target.value);
+                if (error) setError("");
+              }}
             />
           </div>
-        ) : (
+        ) : !error ? (
           <div className="h-48 rounded-2xl bg-white border border-border animate-pulse" />
-        )}
+        ) : null}
 
-        <ActionButton size="xl" onClick={handleStart} disabled={loading || !lookup}>
+        <ActionButton
+          size="xl"
+          onClick={handleStart}
+          disabled={loading || !lookup}
+        >
           {loading ? "Starting…" : "Start Call"}
         </ActionButton>
       </div>
