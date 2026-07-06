@@ -11,6 +11,7 @@ import {
   formatDuration,
   formatLocalDateTime,
 } from "@/lib/datetime";
+import { isExcludedFromMappingReview } from "@/lib/units/types";
 
 const EXCLUSION_REASONS = [
   "Practice Event",
@@ -137,6 +138,10 @@ export function CallDetailClient({ user, callId }: CallDetailClientProps) {
   }
 
   const excluded = call.excludedFromReporting;
+  const mappingReviewExcluded = isExcludedFromMappingReview(
+    call.eventType as "Operational" | "Practice" | "Training" | "Test",
+    call.excludedFromReporting
+  );
 
   return (
     <AppShell user={user}>
@@ -190,20 +195,26 @@ export function CallDetailClient({ user, callId }: CallDetailClientProps) {
           <InfoRow label="Entered Location" value={call.unitLocation} />
           <InfoRow
             label="Reporting Unit"
-            value={call.reportingUnit ?? "Unmapped"}
+            value={call.reportingUnit ?? (mappingReviewExcluded ? "—" : "Unmapped")}
           />
           <InfoRow
             label="Mapping Status"
             value={
-              <span
-                className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
-                  call.mappingStatus === "Mapped"
-                    ? "bg-teal-100 text-primary"
-                    : "bg-amber-100 text-amber-800"
-                }`}
-              >
-                {call.mappingStatus}
-              </span>
+              mappingReviewExcluded ? (
+                <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
+                  Not applicable
+                </span>
+              ) : (
+                <span
+                  className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                    call.mappingStatus === "Mapped"
+                      ? "bg-teal-100 text-primary"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {call.mappingStatus}
+                </span>
+              )
             }
           />
           <InfoRow label="Event Type" value={call.eventType} />

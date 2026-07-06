@@ -1,3 +1,5 @@
+import { EventType } from "@/lib/types";
+
 export type MappingStatus = "Mapped" | "Unmapped";
 
 export interface UnitCrosswalkRule {
@@ -13,6 +15,24 @@ export interface UnitCrosswalkRule {
 export interface UnitMappingResult {
   reportingUnit: string | null;
   mappingStatus: MappingStatus;
+}
+
+export function isExcludedFromMappingReview(
+  eventType: EventType,
+  excludedFromReporting: boolean
+): boolean {
+  return eventType === "Practice" || excludedFromReporting;
+}
+
+export function requiresMappingReview(call: {
+  mappingStatus: MappingStatus;
+  eventType: EventType;
+  excludedFromReporting: boolean;
+}): boolean {
+  if (isExcludedFromMappingReview(call.eventType, call.excludedFromReporting)) {
+    return false;
+  }
+  return call.mappingStatus === "Unmapped";
 }
 
 export function getReportingUnitBucket(

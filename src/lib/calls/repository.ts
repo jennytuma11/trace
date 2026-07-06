@@ -27,7 +27,7 @@ import { isUuid } from "@/lib/auth/uuid";
 import { isInstantInLocalDateRange } from "@/lib/datetime";
 import { CallStatus } from "@/lib/types";
 import { resolveUnitMapping } from "@/lib/units/crosswalk";
-import { MappingStatus } from "@/lib/units/types";
+import { MappingStatus, requiresMappingReview } from "@/lib/units/types";
 
 interface SupabaseCallRow {
   id: string;
@@ -504,6 +504,8 @@ export async function listUnmappedCalls(limit = 200): Promise<CallRecord[]> {
       .from("calls")
       .select("*")
       .eq("mapping_status", "Unmapped")
+      .eq("excluded_from_reporting", false)
+      .neq("event_type", "Practice")
       .order("start_time", { ascending: false })
       .limit(limit);
 
@@ -516,7 +518,8 @@ export async function listUnmappedCalls(limit = 200): Promise<CallRecord[]> {
 
     return data
       .map((row) => mapSupabaseRow(row as SupabaseCallRow, profiles))
-      .filter((call): call is CallRecord => call !== null);
+      .filter((call): call is CallRecord => call !== null)
+      .filter((call) => requiresMappingReview(call));
   }
 
   return listUnmappedCallsFromMock(limit);
@@ -524,9 +527,9 @@ export async function listUnmappedCalls(limit = 200): Promise<CallRecord[]> {
 
 function listUnmappedCallsFromMock(limit: number): CallRecord[] {
   return listMockCalls({ includeExcluded: true, reportingOnly: false })
-    .filter((call) => call.mappingStatus === "Unmapped")
-    .slice(0, limit)
-    .map(mockToCallRecord);
+    .map(mockToCallRecord)
+    .filter((call) => requiresMappingReview(call))
+    .slice(0, limit);
 }
 
 export { findCategoryIdByName, findOutcomeIdByName };
