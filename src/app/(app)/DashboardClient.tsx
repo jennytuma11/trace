@@ -5,7 +5,10 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { KpiCard } from "@/components/KpiCard";
 import { ActionButton } from "@/components/ActionButton";
-import { Role } from "@prisma/client";
+import { SetupBanner } from "@/components/SetupBanner";
+import { ExportExcelButton } from "@/components/ExportExcelButton";
+import { SessionUser } from "@/lib/types";
+import { canExportData, canStartCall } from "@/lib/permissions";
 import { appendTimezoneParam, formatTotalMinutes, getUserTimezone } from "@/lib/datetime";
 
 interface DashboardData {
@@ -20,7 +23,7 @@ interface DashboardData {
 }
 
 interface DashboardPageProps {
-  user: { name: string; role: Role };
+  user: SessionUser;
 }
 
 export function DashboardClient({ user }: DashboardPageProps) {
@@ -38,12 +41,19 @@ export function DashboardClient({ user }: DashboardPageProps) {
   return (
     <AppShell user={user}>
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold">Dashboard</h2>
-          <p className="text-muted text-sm mt-1">Today&apos;s rapid response operations</p>
+        <SetupBanner />
+
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-bold">Dashboard</h2>
+            <p className="text-muted text-sm mt-1">Today&apos;s rapid response operations</p>
+          </div>
+          {canExportData(user.role) && (
+            <ExportExcelButton exportType="dashboard" className="sm:w-auto shrink-0" />
+          )}
         </div>
 
-        {data?.userActiveCallId && (
+        {data?.userActiveCallId && canStartCall(user.role) && (
           <Link
             href={`/call/${data.userActiveCallId}`}
             className="block rounded-2xl border-2 border-primary bg-teal-50 p-4 shadow-sm"
@@ -85,11 +95,13 @@ export function DashboardClient({ user }: DashboardPageProps) {
               <KpiCard label="Busiest unit" value={data.busiestUnit} />
             </div>
 
-            <Link href="/call/start">
-              <ActionButton size="xl" className="mt-2">
-                Start Call
-              </ActionButton>
-            </Link>
+            {canStartCall(user.role) && (
+              <Link href="/call/start">
+                <ActionButton size="xl" className="mt-2">
+                  Start Call
+                </ActionButton>
+              </Link>
+            )}
           </>
         ) : null}
       </div>

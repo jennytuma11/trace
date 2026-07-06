@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { ActionButton } from "@/components/ActionButton";
 import { CallTypeBadge } from "@/components/CallTypeBadge";
-import { Role } from "@prisma/client";
+import { SetupBanner } from "@/components/SetupBanner";
+import { ExportExcelButton } from "@/components/ExportExcelButton";
+import { SessionUser } from "@/lib/types";
+import { canExcludeFromReporting, canExportData } from "@/lib/permissions";
 import {
   appendTimezoneParam,
   formatDuration,
@@ -28,6 +31,12 @@ interface Call {
   unitLocation: string;
   outcome: { name: string } | null;
   user: { name: string };
+  excludedFromReporting: boolean;
+  excludedAt: string | null;
+  excludedByUser: { name: string } | null;
+  exclusionReason: string | null;
+  eventType: string;
+  status: string;
 }
 
 interface LookupData {
@@ -37,13 +46,14 @@ interface LookupData {
 }
 
 interface CallLogClientProps {
-  user: { name: string; role: Role };
+  user: SessionUser;
 }
 
 export function CallLogClient({ user }: CallLogClientProps) {
   const [lookup, setLookup] = useState<LookupData | null>(null);
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showExcluded, setShowExcluded] = useState(false);
 
   const today = new Date();
   const timeZone = getUserTimezone();
@@ -63,13 +73,14 @@ export function CallLogClient({ user }: CallLogClientProps) {
     if (outcomeId) params.set("outcomeId", outcomeId);
     if (userId) params.set("userId", userId);
     if (search) params.set("search", search);
+    if (showExcluded) params.set("includeExcluded", "true");
     appendTimezoneParam(params, timeZone);
 
     const res = await fetch(`/api/calls?${params}`);
     const data = await res.json();
     setCalls(data.calls || []);
     setLoading(false);
-  }, [startDate, endDate, callTypeId, outcomeId, userId, search, timeZone]);
+  }, [startDate, endDate, callTypeId, outcomeId, userId, search, showExcluded, timeZone]);
 
   useEffect(() => {
     fetch("/api/lookup").then((r) => r.json()).then(setLookup);
@@ -79,29 +90,49 @@ export function CallLogClient({ user }: CallLogClientProps) {
     loadCalls();
   }, [loadCalls]);
 
-  function handleExport() {
-    const params = new URLSearchParams();
-    if (startDate) params.set("startDate", startDate);
-    if (endDate) params.set("endDate", endDate);
-    if (callTypeId) params.set("callTypeId", callTypeId);
-    if (outcomeId) params.set("outcomeId", outcomeId);
-    if (userId) params.set("userId", userId);
-    if (search) params.set("search", search);
-    appendTimezoneParam(params, timeZone);
-    window.open(`/api/export?${params}`, "_blank");
+  const isAdmin = canExcludeFromReporting(user.role);
+
+  function getExportParams(): Record<string, string> {
+    const params: Record<string, string> = {};
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    if (callTypeId) params.callTypeId = callTypeId;
+    if (outcomeId) params.outcomeId = outcomeId;
+    if (userId) params.userId = userId;
+    if (search) params.search = search;
+    return params;
   }
 
   return (
     <AppShell user={user}>
       <div className="space-y-5">
+        <SetupBanner />
+
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h2 className="text-2xl font-bold">Call History</h2>
-            <p className="text-muted text-sm mt-1">{calls.length} resolved calls</p>
+            <p className="text-muted text-sm mt-1">{calls.length} calls</p>
           </div>
-          <ActionButton variant="secondary" size="md" onClick={handleExport} className="sm:w-auto">
-            Export CSV
-          </ActionButton>
+          <div className="flex flex-col sm:flex-row gap-2">
+            {isAdmin && (
+              <label className="flex items-center gap-2 text-sm px-3 py-2 rounded-xl border border-border bg-white">
+                <input
+                  type="checkbox"
+                  checked={showExcluded}
+                  onChange={(e) => setShowExcluded(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-primary"
+                />
+                Show Excluded Events
+              </label>
+            )}
+            {canExportData(user.role) && (
+              <ExportExcelButton
+                exportType="history"
+                params={getExportParams()}
+                className="sm:w-auto"
+              />
+            )}
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl border border-border p-4 shadow-sm space-y-3">
@@ -148,7 +179,7 @@ export function CallLogClient({ user }: CallLogClientProps) {
         ) : (
           <>
             <div className="hidden lg:block overflow-x-auto rounded-2xl border border-border bg-white shadow-sm">
-              <table className="w-full text-sm min-w-[1100px]">
+              <table className="w-full text-sm min-w-[1200px]">
                 <thead>
                   <tr className="border-b border-border bg-background text-left">
                     <th className="px-4 py-3 font-semibold">Type</th>
@@ -164,46 +195,11 @@ export function CallLogClient({ user }: CallLogClientProps) {
                 </thead>
                 <tbody>
                   {calls.map((call) => (
-                    <tr
+                    <CallHistoryRow
                       key={call.id}
-                      className="border-b border-border last:border-0 hover:bg-background/50"
-                    >
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <CallTypeBadge
-                          callTypeId={call.callTypeId}
-                          callTypeName={call.callType.name}
-                          size="sm"
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        {call.rapidResponseCategory?.name ?? "—"}
-                      </td>
-                      <td className="px-4 py-3">{call.unitLocation}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {formatLocalDateTime(call.startTime, timeZone)}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {call.teamArrivalTime
-                          ? formatLocalDateTime(call.teamArrivalTime, timeZone)
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {call.responseTimeSeconds != null
-                          ? formatDuration(call.responseTimeSeconds, "response")
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {call.resolvedTime
-                          ? formatLocalDateTime(call.resolvedTime, timeZone)
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap font-mono">
-                        {call.totalCallDurationSeconds != null
-                          ? formatDuration(call.totalCallDurationSeconds, "elapsed")
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3">{call.outcome?.name ?? "—"}</td>
-                    </tr>
+                      call={call}
+                      timeZone={timeZone}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -211,63 +207,151 @@ export function CallLogClient({ user }: CallLogClientProps) {
 
             <div className="lg:hidden space-y-3">
               {calls.map((call) => (
-                <div
+                <CallHistoryCard
                   key={call.id}
-                  className="bg-white rounded-2xl border border-border p-4 shadow-sm"
-                >
-                  <div className="flex justify-between items-start gap-2 mb-3">
-                    <CallTypeBadge
-                      callTypeId={call.callTypeId}
-                      callTypeName={call.callType.name}
-                      size="sm"
-                    />
-                    <p className="text-xs text-muted shrink-0">
-                      {formatLocalTime(call.startTime, timeZone)}
-                    </p>
-                  </div>
-                  <p className="text-sm font-medium">{call.unitLocation}</p>
-                  {call.rapidResponseCategory && (
-                    <p className="text-sm text-muted mt-1">
-                      {call.rapidResponseCategory.name}
-                    </p>
-                  )}
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <HistoryStat
-                      label="Response"
-                      value={
-                        call.responseTimeSeconds != null
-                          ? formatDuration(call.responseTimeSeconds, "response")
-                          : "—"
-                      }
-                    />
-                    <HistoryStat
-                      label="Total"
-                      value={
-                        call.totalCallDurationSeconds != null
-                          ? formatDuration(call.totalCallDurationSeconds, "elapsed")
-                          : "—"
-                      }
-                    />
-                    <HistoryStat
-                      label="Outcome"
-                      value={call.outcome?.name ?? "—"}
-                    />
-                    <HistoryStat
-                      label="End"
-                      value={
-                        call.resolvedTime
-                          ? formatLocalTime(call.resolvedTime, timeZone)
-                          : "—"
-                      }
-                    />
-                  </div>
-                </div>
+                  call={call}
+                  timeZone={timeZone}
+                />
               ))}
             </div>
           </>
         )}
       </div>
     </AppShell>
+  );
+}
+
+function CallHistoryRow({ call, timeZone }: { call: Call; timeZone: string }) {
+  const excluded = call.excludedFromReporting;
+
+  return (
+    <tr
+      className={`border-b border-border last:border-0 hover:bg-background/50 ${
+        excluded ? "bg-gray-50 text-muted" : ""
+      }`}
+    >
+      <td className="px-4 py-3 whitespace-nowrap">
+        <div className="flex items-center gap-2">
+          <CallTypeBadge
+            callTypeId={call.callTypeId}
+            callTypeName={call.callType.name}
+            size="sm"
+          />
+          {excluded && <ExcludedBadge />}
+        </div>
+      </td>
+      <td className="px-4 py-3">{call.rapidResponseCategory?.name ?? "—"}</td>
+      <td className="px-4 py-3">
+        <Link href={`/calls/${call.id}`} className="hover:text-primary hover:underline">
+          {call.unitLocation}
+        </Link>
+        {excluded && <ExcludedMeta call={call} timeZone={timeZone} />}
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        {formatLocalDateTime(call.startTime, timeZone)}
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        {call.teamArrivalTime
+          ? formatLocalDateTime(call.teamArrivalTime, timeZone)
+          : "—"}
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        {call.responseTimeSeconds != null
+          ? formatDuration(call.responseTimeSeconds, "response")
+          : "—"}
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        {call.resolvedTime
+          ? formatLocalDateTime(call.resolvedTime, timeZone)
+          : "—"}
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap font-mono">
+        {call.totalCallDurationSeconds != null
+          ? formatDuration(call.totalCallDurationSeconds, "elapsed")
+          : "—"}
+      </td>
+      <td className="px-4 py-3">{call.outcome?.name ?? "—"}</td>
+    </tr>
+  );
+}
+
+function CallHistoryCard({ call, timeZone }: { call: Call; timeZone: string }) {
+  const excluded = call.excludedFromReporting;
+
+  return (
+    <Link
+      href={`/calls/${call.id}`}
+      className={`block rounded-2xl border p-4 shadow-sm ${
+        excluded ? "bg-gray-50 border-gray-200 text-muted" : "bg-white border-border"
+      }`}
+    >
+      <div className="flex justify-between items-start gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <CallTypeBadge
+            callTypeId={call.callTypeId}
+            callTypeName={call.callType.name}
+            size="sm"
+          />
+          {excluded && <ExcludedBadge />}
+        </div>
+        <p className="text-xs text-muted shrink-0">
+          {formatLocalTime(call.startTime, timeZone)}
+        </p>
+      </div>
+      <p className="text-sm font-medium">{call.unitLocation}</p>
+      {call.rapidResponseCategory && (
+        <p className="text-sm text-muted mt-1">{call.rapidResponseCategory.name}</p>
+      )}
+      {excluded && <ExcludedMeta call={call} timeZone={timeZone} />}
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <HistoryStat
+          label="Response"
+          value={
+            call.responseTimeSeconds != null
+              ? formatDuration(call.responseTimeSeconds, "response")
+              : "—"
+          }
+        />
+        <HistoryStat
+          label="Total"
+          value={
+            call.totalCallDurationSeconds != null
+              ? formatDuration(call.totalCallDurationSeconds, "elapsed")
+              : "—"
+          }
+        />
+        <HistoryStat label="Outcome" value={call.outcome?.name ?? "—"} />
+        <HistoryStat
+          label="End"
+          value={
+            call.resolvedTime
+              ? formatLocalTime(call.resolvedTime, timeZone)
+              : "—"
+          }
+        />
+      </div>
+    </Link>
+  );
+}
+
+function ExcludedBadge() {
+  return (
+    <span className="inline-flex px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-[10px] font-bold uppercase tracking-wide">
+      Excluded
+    </span>
+  );
+}
+
+function ExcludedMeta({ call, timeZone }: { call: Call; timeZone: string }) {
+  return (
+    <div className="mt-1 text-xs text-muted space-y-0.5">
+      <p>Event type: {call.eventType}</p>
+      {call.excludedAt && (
+        <p>Excluded: {formatLocalDateTime(call.excludedAt, timeZone)}</p>
+      )}
+      {call.excludedByUser && <p>Excluded by: {call.excludedByUser.name}</p>}
+      {call.exclusionReason && <p>Reason: {call.exclusionReason}</p>}
+    </div>
   );
 }
 

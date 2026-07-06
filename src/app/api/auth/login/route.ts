@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession, setSessionCookie } from "@/lib/auth";
-import { authenticateMockUser } from "@/lib/mock-auth";
+import { authenticateUser } from "@/lib/auth-service";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
     }
 
-    const user = authenticateMockUser(email, password);
+    const user = await authenticateUser(email, password);
     if (!user) {
       return NextResponse.json(
         { error: "Invalid email or password. Use the demo credentials shown below." },
@@ -18,16 +18,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = await createSession({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    });
+    const token = await createSession(user);
 
-    const response = NextResponse.json({
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
-    });
+    const response = NextResponse.json({ user });
     setSessionCookie(response, token);
     return response;
   } catch {

@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { CallTimer } from "@/components/CallTimer";
 import { ActionButton } from "@/components/ActionButton";
 import { SelectField } from "@/components/SelectField";
 import { CallTypeBadge } from "@/components/CallTypeBadge";
-import { Role } from "@prisma/client";
+import { SessionUser } from "@/lib/types";
+import { canResolveCall } from "@/lib/permissions";
 import {
   formatLocalDateTime,
   formatDuration,
@@ -24,6 +26,8 @@ interface Call {
   startTime: string;
   teamArrivalTime: string | null;
   responseTimeSeconds: number | null;
+  eventType: string;
+  excludedFromReporting: boolean;
 }
 
 interface LookupData {
@@ -31,7 +35,7 @@ interface LookupData {
 }
 
 interface ActiveCallClientProps {
-  user: { name: string; role: Role };
+  user: SessionUser;
   callId: string;
 }
 
@@ -45,6 +49,8 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
   const [loading, setLoading] = useState(false);
   const [arrivalLoading, setArrivalLoading] = useState(false);
 
+  const canResolve = canResolveCall(user.role);
+
   useEffect(() => {
     Promise.all([
       fetch(`/api/calls/${callId}`).then((r) => r.json()),
@@ -52,8 +58,8 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
     ])
       .then(([callData, lookupData]) => {
         if (callData.call) {
-          if (callData.call.status === "RESOLVED") {
-            router.push("/calls");
+          if (callData.call.status !== "ACTIVE") {
+            router.push(`/calls/${callId}`);
             return;
           }
           setCall(callData.call);
@@ -117,7 +123,7 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
         return;
       }
 
-      router.push("/calls");
+      router.push(`/calls/${callId}`);
     } catch (err) {
       console.error("[Trace] Resolve call failed:", err);
       setError("Failed to resolve call. Please try again.");
@@ -150,6 +156,12 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
           </span>
         </div>
 
+        {call.excludedFromReporting && (
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-muted">
+            Practice / test event — excluded from operational reporting.
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl border border-border p-5 shadow-sm space-y-3">
           <InfoRow
             label="Call Type"
@@ -165,6 +177,7 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
             <InfoRow label="RR Category" value={call.rapidResponseCategory.name} />
           )}
           <InfoRow label="Unit / Location" value={call.unitLocation} />
+          <InfoRow label="Event Type" value={call.eventType} />
           {call.additionalNotes && (
             <InfoRow label="Additional Notes" value={call.additionalNotes} />
           )}
@@ -179,84 +192,98 @@ export function ActiveCallClient({ user, callId }: ActiveCallClientProps) {
           />
         </div>
 
-        <div className="bg-white rounded-2xl border border-border p-5 shadow-sm space-y-4">
-          <div>
-            <h3 className="font-semibold text-lg">Team Arrival</h3>
-            <p className="text-sm text-muted mt-1">
-              Record when the rapid response team arrives on scene.
-            </p>
-          </div>
-
-          {call.responseTimeSeconds != null ? (
-            <div className="rounded-xl bg-background border border-border p-4 text-center">
-              <p className="text-sm font-medium text-muted uppercase tracking-wide">
-                Response Time
-              </p>
-              <p className="font-mono text-4xl font-bold tracking-wider mt-2 tabular-nums">
-                {formatDuration(call.responseTimeSeconds, "response")}
-              </p>
-              {call.teamArrivalTime && (
-                <p className="text-xs text-muted mt-2">
-                  Arrived {formatLocalDateTime(call.teamArrivalTime)}
+        {canResolve && (
+          <>
+            <div className="bg-white rounded-2xl border border-border p-5 shadow-sm space-y-4">
+              <div>
+                <h3 className="font-semibold text-lg">Team Arrival</h3>
+                <p className="text-sm text-muted mt-1">
+                  Record when the rapid response team arrives on scene.
                 </p>
+              </div>
+
+              {call.responseTimeSeconds != null ? (
+                <div className="rounded-xl bg-background border border-border p-4 text-center">
+                  <p className="text-sm font-medium text-muted uppercase tracking-wide">
+                    Response Time
+                  </p>
+                  <p className="font-mono text-4xl font-bold tracking-wider mt-2 tabular-nums">
+                    {formatDuration(call.responseTimeSeconds, "response")}
+                  </p>
+                  {call.teamArrivalTime && (
+                    <p className="text-xs text-muted mt-2">
+                      Arrived {formatLocalDateTime(call.teamArrivalTime)}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <ActionButton
+                  size="xl"
+                  variant="success"
+                  onClick={handleTeamArrived}
+                  disabled={arrivalLoading}
+                >
+                  {arrivalLoading ? "Recording…" : "Team Arrived"}
+                </ActionButton>
               )}
             </div>
-          ) : (
-            <ActionButton
-              size="xl"
-              variant="success"
-              onClick={handleTeamArrived}
-              disabled={arrivalLoading}
-            >
-              {arrivalLoading ? "Recording…" : "Team Arrived"}
-            </ActionButton>
-          )}
-        </div>
 
-        <div className="bg-white rounded-2xl border border-border p-5 shadow-sm space-y-4">
-          <h3 className="font-semibold text-lg">Resolve Call</h3>
+            <div className="bg-white rounded-2xl border border-border p-5 shadow-sm space-y-4">
+              <h3 className="font-semibold text-lg">Resolve Call</h3>
 
-          {lookup && (
-            <SelectField
-              label="Outcome *"
-              options={lookup.outcomes}
-              value={outcomeId}
-              onChange={(e) => {
-                setOutcomeId(e.target.value);
-                if (error) setError("");
-              }}
-              required
-            />
-          )}
+              {lookup && (
+                <SelectField
+                  label="Outcome *"
+                  options={lookup.outcomes}
+                  value={outcomeId}
+                  onChange={(e) => {
+                    setOutcomeId(e.target.value);
+                    if (error) setError("");
+                  }}
+                  required
+                />
+              )}
 
-          <label className="block">
-            <span className="block text-sm font-medium mb-2">
-              Resolution Notes (Optional)
-            </span>
-            <textarea
-              value={resolutionNotes}
-              onChange={(e) => setResolutionNotes(e.target.value)}
-              rows={3}
-              placeholder="Operational notes only — no PHI"
-              className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary resize-none"
-            />
-          </label>
+              <label className="block">
+                <span className="block text-sm font-medium mb-2">
+                  Resolution Notes (Optional)
+                </span>
+                <textarea
+                  value={resolutionNotes}
+                  onChange={(e) => setResolutionNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Operational notes only — no PHI"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary resize-none"
+                />
+              </label>
 
-          {error && (
-            <div className="bg-red-50 text-danger text-sm px-4 py-3 rounded-xl border border-red-200">
-              {error}
+              {error && (
+                <div className="bg-red-50 text-danger text-sm px-4 py-3 rounded-xl border border-red-200">
+                  {error}
+                </div>
+              )}
+
+              <ActionButton
+                size="xl"
+                variant="danger"
+                onClick={handleResolveCall}
+                disabled={loading || !outcomeId}
+              >
+                {loading ? "Resolving…" : "Resolve Call"}
+              </ActionButton>
             </div>
-          )}
+          </>
+        )}
 
-          <ActionButton
-            size="xl"
-            variant="danger"
-            onClick={handleResolveCall}
-            disabled={loading || !outcomeId}
-          >
-            {loading ? "Resolving…" : "Resolve Call"}
-          </ActionButton>
-        </div>
+        {!canResolve && (
+          <div className="rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted">
+            You have read-only access to this active call.
+          </div>
+        )}
+
+        <Link href="/calls" className="block text-center text-sm text-primary hover:underline">
+          View call history
+        </Link>
       </div>
     </AppShell>
   );

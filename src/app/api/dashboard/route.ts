@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import {
-  countActiveMockCalls,
-  getActiveCallForUser,
-  listResolvedMockCalls,
-} from "@/lib/mock-calls";
+  countActiveCalls,
+  getActiveCall,
+  listReportingCalls,
+} from "@/lib/calls/repository";
+import { canViewDashboard } from "@/lib/permissions";
 import {
   getCallDurationMinutes,
   getTimezoneFromSearchParams,
@@ -19,17 +20,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (!canViewDashboard(session.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { searchParams } = new URL(request.url);
   const timeZone = getTimezoneFromSearchParams(searchParams);
   const { start: todayStart, end: todayEnd } = getTodayRangeInTimezone(timeZone);
   const { start: weekStart, end: weekEnd } = getWeekRangeInTimezone(timeZone);
 
-  const resolvedCalls = listResolvedMockCalls();
-  const todayCalls = resolvedCalls.filter((call) => {
+  const reportingCalls = await listReportingCalls({ timeZone });
+  const todayCalls = reportingCalls.filter((call) => {
     const received = new Date(call.startTime);
     return received >= todayStart && received <= todayEnd;
   });
-  const weekCalls = resolvedCalls.filter((call) => {
+  const weekCalls = reportingCalls.filter((call) => {
     const received = new Date(call.startTime);
     return received >= weekStart && received <= weekEnd;
   });
@@ -70,11 +75,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const userActiveCall = getActiveCallForUser(session.id);
+  const userActiveCall = await getActiveCall(session.id);
 
   return NextResponse.json({
     totalCallsToday: todayCalls.length,
-    activeCalls: countActiveMockCalls(),
+    activeCalls: await countActiveCalls(),
     avgDurationMinutes: avgDuration,
     totalMinutesToday,
     callsThisWeek: weekCalls.length,

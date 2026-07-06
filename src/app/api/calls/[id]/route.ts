@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import {
-  getCallById,
-  recordTeamArrival,
-  resolveMockCall,
-} from "@/lib/mock-calls";
+  excludeCallFromReporting,
+  fetchCallById,
+  markTeamArrival,
+  resolveCall,
+} from "@/lib/calls/repository";
+import { canExcludeFromReporting, canResolveCall } from "@/lib/permissions";
 
 export async function GET(
   _request: NextRequest,
@@ -16,7 +18,7 @@ export async function GET(
   }
 
   const { id } = await params;
-  const call = getCallById(id);
+  const call = await fetchCallById(id);
 
   if (!call) {
     return NextResponse.json({ error: "Call not found" }, { status: 404 });
@@ -39,20 +41,42 @@ export async function PATCH(
     const body = await request.json();
     const { action } = body;
 
-    if (action !== "team_arrived") {
-      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    if (action === "team_arrived") {
+      if (!canResolveCall(session.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
+      const result = await markTeamArrival(id);
+      if (result.error || !result.call) {
+        console.error("[Trace] markTeamArrival failed:", result.error);
+        return NextResponse.json(
+          { error: result.error || "Failed to record team arrival" },
+          { status: result.error === "Call not found" ? 404 : 400 }
+        );
+      }
+
+      return NextResponse.json({ call: result.call });
     }
 
-    const result = recordTeamArrival(id);
-    if (result.error || !result.call) {
-      console.error("[Trace] recordTeamArrival failed:", result.error);
-      return NextResponse.json(
-        { error: result.error || "Failed to record team arrival" },
-        { status: result.error === "Call not found" ? 404 : 400 }
-      );
+    if (action === "exclude") {
+      if (!canExcludeFromReporting(session.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
+      const result = await excludeCallFromReporting(id, session.id, {
+        reason: body.reason,
+      });
+      if (result.error || !result.call) {
+        return NextResponse.json(
+          { error: result.error || "Failed to exclude event" },
+          { status: result.error === "Call not found" ? 404 : 400 }
+        );
+      }
+
+      return NextResponse.json({ call: result.call });
     }
 
-    return NextResponse.json({ call: result.call });
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error) {
     console.error("[Trace] PATCH /api/calls/[id] failed:", error);
     return NextResponse.json({ error: "Action failed" }, { status: 500 });
@@ -68,6 +92,10 @@ export async function PUT(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (!canResolveCall(session.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const { id } = await params;
     const { outcomeId, resolutionNotes } = await request.json();
@@ -79,9 +107,9 @@ export async function PUT(
       );
     }
 
-    const result = resolveMockCall(id, { outcomeId, resolutionNotes });
+    const result = await resolveCall(id, { outcomeId, resolutionNotes });
     if (result.error || !result.call) {
-      console.error("[Trace] resolveMockCall failed:", result.error);
+      console.error("[Trace] resolveCall failed:", result.error);
       return NextResponse.json(
         { error: result.error || "Failed to resolve call" },
         { status: result.error === "Call not found" ? 404 : 400 }

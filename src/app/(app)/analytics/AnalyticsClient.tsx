@@ -11,7 +11,10 @@ import {
   OutcomesChart,
   TeamTimeChart,
 } from "@/components/Charts";
-import { Role } from "@prisma/client";
+import { SetupBanner } from "@/components/SetupBanner";
+import { ExportExcelButton } from "@/components/ExportExcelButton";
+import { SessionUser } from "@/lib/types";
+import { canExportData } from "@/lib/permissions";
 import { appendTimezoneParam, getUserTimezone, toISODateInput } from "@/lib/datetime";
 import { subDays } from "date-fns";
 
@@ -26,7 +29,7 @@ interface AnalyticsData {
 }
 
 interface AnalyticsClientProps {
-  user: { name: string; role: Role };
+  user: SessionUser;
 }
 
 export function AnalyticsClient({ user }: AnalyticsClientProps) {
@@ -52,6 +55,8 @@ export function AnalyticsClient({ user }: AnalyticsClientProps) {
   return (
     <AppShell user={user}>
       <div className="space-y-6">
+        <SetupBanner />
+
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold">Analytics</h2>
@@ -59,7 +64,15 @@ export function AnalyticsClient({ user }: AnalyticsClientProps) {
               {data ? `${data.totalCalls} calls in selected period` : "Loading…"}
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            {canExportData(user.role) && (
+              <ExportExcelButton
+                exportType="analytics"
+                params={{ startDate, endDate }}
+                className="sm:w-auto"
+              />
+            )}
+            <div className="flex gap-3">
             <label className="block">
               <span className="block text-xs font-medium text-muted mb-1">From</span>
               <input
@@ -78,6 +91,7 @@ export function AnalyticsClient({ user }: AnalyticsClientProps) {
                 className="px-3 py-2 text-sm rounded-lg border border-border bg-white"
               />
             </label>
+            </div>
           </div>
         </div>
 

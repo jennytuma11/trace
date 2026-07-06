@@ -2,23 +2,35 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Role } from "@prisma/client";
+import { SessionUser } from "@/lib/types";
+import {
+  canConfigureSettings,
+  canManageUsers,
+  canStartCall,
+  canViewAnalytics,
+  canViewCallHistory,
+  canViewDashboard,
+  canViewReports,
+  formatRoleLabel,
+} from "@/lib/permissions";
 
 interface AppShellProps {
   children: React.ReactNode;
-  user: { name: string; role: Role };
+  user: SessionUser;
 }
 
-const navItems = [
-  { href: "/", label: "Dashboard", icon: "📊" },
-  { href: "/call/start", label: "Start Call", icon: "🚨" },
-  { href: "/calls", label: "Call History", icon: "📋" },
-  { href: "/analytics", label: "Analytics", icon: "📈" },
+const allNavItems = [
+  { href: "/", label: "Dashboard", icon: "📊", visible: canViewDashboard },
+  { href: "/call/start", label: "Start Call", icon: "🚨", visible: canStartCall },
+  { href: "/calls", label: "Call History", icon: "📋", visible: canViewCallHistory },
+  { href: "/analytics", label: "Analytics", icon: "📈", visible: canViewAnalytics },
+  { href: "/reports", label: "Reports", icon: "📄", visible: canViewReports },
 ];
 
 export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const navItems = allNavItems.filter((item) => item.visible(user.role));
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -40,9 +52,25 @@ export function AppShell({ children, user }: AppShellProps) {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {canManageUsers(user.role) && (
+              <Link
+                href="/users"
+                className="hidden sm:inline text-sm px-3 py-2 rounded-lg border border-border hover:bg-background transition-colors"
+              >
+                Users
+              </Link>
+            )}
+            {canConfigureSettings(user.role) && (
+              <Link
+                href="/settings"
+                className="hidden sm:inline text-sm px-3 py-2 rounded-lg border border-border hover:bg-background transition-colors"
+              >
+                Settings
+              </Link>
+            )}
             <div className="hidden sm:block text-right">
               <p className="text-sm font-medium leading-tight">{user.name}</p>
-              <p className="text-xs text-muted capitalize">{user.role.replace("_", " ").toLowerCase()}</p>
+              <p className="text-xs text-muted">{formatRoleLabel(user.role)}</p>
             </div>
             <button
               onClick={handleLogout}
@@ -57,7 +85,10 @@ export function AppShell({ children, user }: AppShellProps) {
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-5 pb-24">{children}</main>
 
       <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-border shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
-        <div className="max-w-6xl mx-auto grid grid-cols-4">
+        <div
+          className="max-w-6xl mx-auto grid"
+          style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
+        >
           {navItems.map((item) => {
             const active =
               item.href === "/"

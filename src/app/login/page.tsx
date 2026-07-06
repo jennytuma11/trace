@@ -30,7 +30,11 @@ function LoginForm() {
         return;
       }
 
-      router.push("/");
+      if (data.user?.role === "TEAM_MEMBER") {
+        router.push("/call/start");
+      } else {
+        router.push("/");
+      }
       router.refresh();
     } catch {
       setError("Unable to connect. Please try again.");
@@ -57,17 +61,22 @@ function LoginForm() {
           <p className="text-sm font-semibold text-primary mb-2">Demo credentials</p>
           <dl className="space-y-1 text-sm">
             <div className="flex gap-2">
-              <dt className="font-medium text-muted w-20 shrink-0">Email</dt>
+              <dt className="font-medium text-muted w-24 shrink-0">Administrator</dt>
+              <dd className="font-mono">admin@trace.local</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="font-medium text-muted w-24 shrink-0">Team Member</dt>
               <dd className="font-mono">member@trace.local</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="font-medium text-muted w-20 shrink-0">Password</dt>
+              <dt className="font-medium text-muted w-24 shrink-0">Viewer</dt>
+              <dd className="font-mono">viewer@trace.local</dd>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <dt className="font-medium text-muted w-24 shrink-0">Password</dt>
               <dd className="font-mono">{DEMO_PASSWORD}</dd>
             </div>
           </dl>
-          <p className="text-xs text-muted mt-3">
-            Also works: admin@trace.local, manager@trace.local (same password)
-          </p>
         </div>
 
         <form

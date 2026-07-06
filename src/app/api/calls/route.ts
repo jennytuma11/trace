@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { listResolvedMockCalls } from "@/lib/mock-calls";
-import {
-  getTimezoneFromSearchParams,
-  isInstantInLocalDateRange,
-} from "@/lib/datetime";
+import { listCalls } from "@/lib/calls/repository";
+import { canViewCallHistory } from "@/lib/permissions";
+import { getTimezoneFromSearchParams } from "@/lib/datetime";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!canViewCallHistory(session.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -18,32 +20,20 @@ export async function GET(request: NextRequest) {
   const callTypeId = searchParams.get("callTypeId");
   const outcomeId = searchParams.get("outcomeId");
   const userId = searchParams.get("userId");
-  const search = searchParams.get("search")?.toLowerCase();
+  const search = searchParams.get("search");
   const timeZone = getTimezoneFromSearchParams(searchParams);
+  const includeExcluded = searchParams.get("includeExcluded") === "true";
 
-  let calls = listResolvedMockCalls();
-
-  if (startDate && endDate) {
-    calls = calls.filter((call) =>
-      isInstantInLocalDateRange(call.startTime, startDate, endDate, timeZone)
-    );
-  }
-  if (callTypeId) calls = calls.filter((call) => call.callTypeId === callTypeId);
-  if (outcomeId) calls = calls.filter((call) => call.outcomeId === outcomeId);
-  if (userId) calls = calls.filter((call) => call.userId === userId);
-
-  if (search) {
-    calls = calls.filter(
-      (call) =>
-        call.unitLocation.toLowerCase().includes(search) ||
-        call.callType.name.toLowerCase().includes(search) ||
-        (call.rapidResponseCategory?.name.toLowerCase().includes(search) ?? false) ||
-        (call.outcome?.name.toLowerCase().includes(search) ?? false) ||
-        call.user.name.toLowerCase().includes(search) ||
-        (call.additionalNotes?.toLowerCase().includes(search) ?? false) ||
-        (call.resolutionNotes?.toLowerCase().includes(search) ?? false)
-    );
-  }
+  const calls = await listCalls({
+    startDate,
+    endDate,
+    callTypeId,
+    outcomeId,
+    userId,
+    search,
+    timeZone,
+    includeExcluded: session.role === "ADMINISTRATOR" && includeExcluded,
+  });
 
   return NextResponse.json({ calls });
 }

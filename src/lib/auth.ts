@@ -1,18 +1,10 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { Role } from "@prisma/client";
-
-export interface SessionUser {
-  id: string;
-  email: string;
-  name: string;
-  role: Role;
-}
+import { SessionUser, TraceRole } from "@/lib/types";
 
 const COOKIE_NAME = "trace_session";
 
-// Hardcoded for mock auth — no environment variables required.
 const MOCK_JWT_SECRET = "trace-mock-session-secret";
 
 function getSecret() {
@@ -71,7 +63,7 @@ export async function getSessionFromRequest(
   return verifySession(token);
 }
 
-export function hasRole(user: SessionUser, roles: Role[]): boolean {
+export function hasRole(user: SessionUser, roles: TraceRole[]): boolean {
   return roles.includes(user.role);
 }
 

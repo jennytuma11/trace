@@ -55,6 +55,14 @@ export function findMockOutcome(id: string) {
   return MOCK_OUTCOMES.find((o) => o.id === id) ?? null;
 }
 
+export function findMockOutcomeByName(name: string) {
+  return MOCK_OUTCOMES.find((o) => o.name === name) ?? null;
+}
+
+export function findMockRrCategoryByName(name: string) {
+  return MOCK_RR_CATEGORIES.find((c) => c.name === name) ?? null;
+}
+
 export function findMockUser(id: string) {
   const user = MOCK_USERS.find((u) => u.id === id);
   if (!user) return null;

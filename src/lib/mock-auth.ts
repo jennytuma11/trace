@@ -1,4 +1,4 @@
-import { Role } from "@prisma/client";
+import { TraceRole } from "@/lib/types";
 
 export const DEMO_PASSWORD = "password123";
 
@@ -6,7 +6,7 @@ export interface MockUser {
   id: string;
   email: string;
   name: string;
-  role: Role;
+  role: TraceRole;
   password: string;
 }
 
@@ -15,14 +15,7 @@ export const MOCK_USERS: MockUser[] = [
     id: "mock-admin",
     email: "admin@trace.local",
     name: "Admin User",
-    role: "ADMIN",
-    password: DEMO_PASSWORD,
-  },
-  {
-    id: "mock-manager",
-    email: "manager@trace.local",
-    name: "Manager User",
-    role: "MANAGER",
+    role: "ADMINISTRATOR",
     password: DEMO_PASSWORD,
   },
   {
@@ -30,6 +23,13 @@ export const MOCK_USERS: MockUser[] = [
     email: "member@trace.local",
     name: "Team Member",
     role: "TEAM_MEMBER",
+    password: DEMO_PASSWORD,
+  },
+  {
+    id: "mock-viewer",
+    email: "viewer@trace.local",
+    name: "Viewer User",
+    role: "VIEWER",
     password: DEMO_PASSWORD,
   },
 ];

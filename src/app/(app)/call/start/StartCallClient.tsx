@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { SelectField } from "@/components/SelectField";
 import { ActionButton } from "@/components/ActionButton";
+import { SetupBanner } from "@/components/SetupBanner";
 import { getCallTypeButtonClasses } from "@/components/CallTypeBadge";
-import { Role } from "@prisma/client";
+import { SessionUser } from "@/lib/types";
 import {
   CODE_BLUE_TYPE_ID,
   RAPID_RESPONSE_TYPE_ID,
@@ -18,7 +19,7 @@ interface LookupData {
 }
 
 interface StartCallClientProps {
-  user: { name: string; role: Role };
+  user: SessionUser;
 }
 
 function isValidLookup(data: unknown): data is LookupData {
@@ -37,6 +38,7 @@ export function StartCallClient({ user }: StartCallClientProps) {
   const [callTypeId, setCallTypeId] = useState("");
   const [rrCategoryId, setRrCategoryId] = useState("");
   const [additionalNotes, setAdditionalNotes] = useState("");
+  const [isPracticeTest, setIsPracticeTest] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
@@ -109,6 +111,7 @@ export function StartCallClient({ user }: StartCallClientProps) {
           callTypeId,
           rapidResponseCategoryId: isRapidResponse ? rrCategoryId || null : null,
           additionalNotes: additionalNotes.trim() || null,
+          isPracticeTest,
         }),
       });
 
@@ -149,6 +152,8 @@ export function StartCallClient({ user }: StartCallClientProps) {
   return (
     <AppShell user={user}>
       <div className="space-y-6 max-w-lg mx-auto">
+        <SetupBanner />
+
         <div>
           <h2 className="text-2xl font-bold">Start Call</h2>
           <p className="text-muted text-sm mt-1">Timer starts when you begin</p>
@@ -221,6 +226,24 @@ export function StartCallClient({ user }: StartCallClientProps) {
                 className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary resize-none"
               />
             </label>
+
+            <div className="rounded-xl border border-border bg-background p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPracticeTest}
+                  onChange={(e) => setIsPracticeTest(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <span>
+                  <span className="block text-sm font-medium">Practice / Test Event</span>
+                  <span className="block text-xs text-muted mt-1">
+                    Use this for training, testing, or practice events that should not be
+                    included in operational reporting.
+                  </span>
+                </span>
+              </label>
+            </div>
           </div>
         ) : !error ? (
           <div className="h-48 rounded-2xl bg-white border border-border animate-pulse" />
