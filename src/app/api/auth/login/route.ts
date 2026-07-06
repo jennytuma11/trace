@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession, setSessionCookie } from "@/lib/auth";
 import { authenticateUser } from "@/lib/auth-service";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,10 +11,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
     }
 
-    const user = await authenticateUser(email, password);
+    const { user, error } = await authenticateUser(email, password);
     if (!user) {
       return NextResponse.json(
-        { error: "Invalid email or password. Use the demo credentials shown below." },
+        {
+          error:
+            error ??
+            (isSupabaseConfigured()
+              ? "Invalid email or password. Use your Supabase Auth account."
+              : "Invalid email or password. Use the demo credentials shown below."),
+        },
         { status: 401 }
       );
     }

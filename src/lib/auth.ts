@@ -1,7 +1,11 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { isValidSessionUser } from "@/lib/auth/session-user";
 import { SessionUser, TraceRole } from "@/lib/types";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+
+export type { SessionUser };
 
 const COOKIE_NAME = "trace_session";
 
@@ -22,7 +26,11 @@ export async function createSession(user: SessionUser): Promise<string> {
 export async function verifySession(token: string): Promise<SessionUser | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret());
-    return payload as unknown as SessionUser;
+    const session = payload as unknown as SessionUser;
+    if (isSupabaseConfigured() && !isValidSessionUser(session)) {
+      return null;
+    }
+    return session;
   } catch {
     return null;
   }

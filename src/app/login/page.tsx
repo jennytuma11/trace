@@ -77,6 +77,9 @@ function LoginForm() {
               <dd className="font-mono">{DEMO_PASSWORD}</dd>
             </div>
           </dl>
+          <p className="text-xs text-muted mt-3">
+            Use Supabase Auth accounts with these emails. If calls fail to save, sign out and sign in again.
+          </p>
         </div>
 
         <form

@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireSession } from "@/lib/auth/require-session";
+import { DEMO_USERS } from "@/lib/mock-auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { canManageUsers, formatRoleLabel } from "@/lib/permissions";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireSession();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  if (!canManageUsers(session.role)) {
+  if (!canManageUsers(auth.session.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -37,15 +38,14 @@ export async function GET() {
     });
   }
 
-  const { MOCK_USERS } = await import("@/lib/mock-auth");
   return NextResponse.json({
-    users: MOCK_USERS.map(({ id, email, name, role }) => ({
+    users: DEMO_USERS.map(({ id, email, name, role }) => ({
       id,
       email,
       name,
       role,
       roleLabel: formatRoleLabel(role),
     })),
-    source: "mock",
+    source: "local",
   });
 }

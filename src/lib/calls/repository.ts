@@ -22,6 +22,8 @@ import {
 } from "@/lib/calls/types";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { AUTH_ERROR_INVALID_SESSION } from "@/lib/auth/session-user";
+import { isUuid } from "@/lib/auth/uuid";
 import { isInstantInLocalDateRange } from "@/lib/datetime";
 import { CallStatus } from "@/lib/types";
 
@@ -102,6 +104,21 @@ function mockToCallRecord(call: SerializedMockCall): CallRecord {
   return call as CallRecord;
 }
 
+function supabaseConfigError(): { error: string } {
+  return { error: "Supabase is not fully configured on the server." };
+}
+
+function invalidUserIdError(): { error: string } {
+  return { error: AUTH_ERROR_INVALID_SESSION };
+}
+
+function assertSupabaseUserId(userId: string): { ok: true } | { ok: false; error: string } {
+  if (!isUuid(userId)) {
+    return { ok: false, error: AUTH_ERROR_INVALID_SESSION };
+  }
+  return { ok: true };
+}
+
 function filterCalls(calls: CallRecord[], options: ListCallsOptions): CallRecord[] {
   const {
     startDate,
@@ -150,7 +167,7 @@ export function isUsingSupabase(): boolean {
 export async function getActiveCall(userId: string): Promise<CallRecord | null> {
   if (isSupabaseConfigured()) {
     const admin = getSupabaseAdmin();
-    if (!admin) return getActiveCallForUser(userId);
+    if (!admin) return null;
 
     const { data, error } = await admin
       .from("calls")
@@ -174,10 +191,7 @@ export async function getActiveCall(userId: string): Promise<CallRecord | null> 
 export async function fetchCallById(id: string): Promise<CallRecord | null> {
   if (isSupabaseConfigured()) {
     const admin = getSupabaseAdmin();
-    if (!admin) {
-      const call = getCallById(id);
-      return call ? mockToCallRecord(call) : null;
-    }
+    if (!admin) return null;
 
     const { data, error } = await admin.from("calls").select("*").eq("id", id).maybeSingle();
     if (error || !data) return null;
@@ -195,14 +209,11 @@ export async function createCall(
   input: CreateCallInput
 ): Promise<{ call?: CallRecord; error?: string }> {
   if (isSupabaseConfigured()) {
+    const userCheck = assertSupabaseUserId(userId);
+    if (!userCheck.ok) return invalidUserIdError();
+
     const admin = getSupabaseAdmin();
-    if (!admin) {
-      const result = createMockCall(userId, input);
-      return {
-        call: result.call ? mockToCallRecord(result.call) : undefined,
-        error: result.error,
-      };
-    }
+    if (!admin) return supabaseConfigError();
 
     const existing = await getActiveCall(userId);
     if (existing) {
@@ -255,13 +266,7 @@ export async function markTeamArrival(
 ): Promise<{ call?: CallRecord; error?: string }> {
   if (isSupabaseConfigured()) {
     const admin = getSupabaseAdmin();
-    if (!admin) {
-      const result = recordTeamArrival(id);
-      return {
-        call: result.call ? mockToCallRecord(result.call) : undefined,
-        error: result.error,
-      };
-    }
+    if (!admin) return supabaseConfigError();
 
     const existing = await fetchCallById(id);
     if (!existing) return { error: "Call not found" };
@@ -305,13 +310,7 @@ export async function resolveCall(
 ): Promise<{ call?: CallRecord; error?: string }> {
   if (isSupabaseConfigured()) {
     const admin = getSupabaseAdmin();
-    if (!admin) {
-      const result = resolveMockCall(id, input);
-      return {
-        call: result.call ? mockToCallRecord(result.call) : undefined,
-        error: result.error,
-      };
-    }
+    if (!admin) return supabaseConfigError();
 
     const existing = await fetchCallById(id);
     if (!existing) return { error: "Call not found" };
@@ -360,14 +359,11 @@ export async function excludeCallFromReporting(
   input: ExcludeCallInput
 ): Promise<{ call?: CallRecord; error?: string }> {
   if (isSupabaseConfigured()) {
+    const userCheck = assertSupabaseUserId(userId);
+    if (!userCheck.ok) return invalidUserIdError();
+
     const admin = getSupabaseAdmin();
-    if (!admin) {
-      const result = excludeMockCall(id, userId, input);
-      return {
-        call: result.call ? mockToCallRecord(result.call) : undefined,
-        error: result.error,
-      };
-    }
+    if (!admin) return supabaseConfigError();
 
     const existing = await fetchCallById(id);
     if (!existing) return { error: "Call not found" };
@@ -415,10 +411,7 @@ export async function listCalls(options: ListCallsOptions = {}): Promise<CallRec
 
   if (isSupabaseConfigured()) {
     const admin = getSupabaseAdmin();
-    if (!admin) {
-      const calls = listMockCalls({ includeExcluded, reportingOnly }).map(mockToCallRecord);
-      return filterCalls(calls, options);
-    }
+    if (!admin) return [];
 
     let query = admin.from("calls").select("*");
 
@@ -463,7 +456,7 @@ export async function listCalls(options: ListCallsOptions = {}): Promise<CallRec
 export async function countActiveCalls(): Promise<number> {
   if (isSupabaseConfigured()) {
     const admin = getSupabaseAdmin();
-    if (!admin) return countActiveMockCalls();
+    if (!admin) return 0;
 
     const { count, error } = await admin
       .from("calls")

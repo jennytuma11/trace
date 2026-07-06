@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { COOKIE_NAME_EXPORT, verifySession } from "@/lib/auth";
+import {
+  clearSessionCookie,
+  COOKIE_NAME_EXPORT,
+  verifySession,
+} from "@/lib/auth";
 
 const publicPaths = ["/login", "/api/auth/login"];
 
@@ -18,6 +22,25 @@ export async function middleware(request: NextRequest) {
   const isPublic = publicPaths.some((p) => pathname === p || pathname.startsWith(p));
   const token = request.cookies.get(COOKIE_NAME_EXPORT)?.value;
   const session = token ? await verifySession(token) : null;
+
+  if (token && !session) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("from", pathname);
+    loginUrl.searchParams.set("reason", "session-expired");
+    const response = isPublic
+      ? NextResponse.next()
+      : pathname.startsWith("/api/")
+        ? NextResponse.json(
+            {
+              error:
+                "Your session is invalid. Please sign out and sign in again with your Supabase account.",
+            },
+            { status: 401 }
+          )
+        : NextResponse.redirect(loginUrl);
+    clearSessionCookie(response);
+    return response;
+  }
 
   if (pathname === "/login" && session) {
     return NextResponse.redirect(new URL("/", request.url));

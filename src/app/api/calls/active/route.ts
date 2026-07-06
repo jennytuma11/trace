@@ -1,30 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireSession } from "@/lib/auth/require-session";
 import {
   countActiveCalls,
   createCall,
   getActiveCall,
 } from "@/lib/calls/repository";
 import { canStartCall } from "@/lib/permissions";
+import { isUuid } from "@/lib/auth/uuid";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { AUTH_ERROR_INVALID_SESSION } from "@/lib/auth/session-user";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireSession();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const activeCall = await getActiveCall(session.id);
+  const activeCall = await getActiveCall(auth.session.id);
   return NextResponse.json({ activeCall });
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireSession();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  if (!canStartCall(session.role)) {
+  if (!canStartCall(auth.session.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (isSupabaseConfigured() && !isUuid(auth.session.id)) {
+    return NextResponse.json({ error: AUTH_ERROR_INVALID_SESSION }, { status: 401 });
   }
 
   try {
@@ -55,7 +62,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existing = await getActiveCall(session.id);
+    const existing = await getActiveCall(auth.session.id);
     if (existing) {
       return NextResponse.json(
         { error: "You already have an active call", callId: existing.id },
@@ -63,7 +70,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await createCall(session.id, {
+    const result = await createCall(auth.session.id, {
       callTypeId,
       unitLocation,
       rapidResponseCategoryId,
@@ -72,9 +79,10 @@ export async function POST(request: NextRequest) {
     });
     if (result.error || !result.call) {
       console.error("[Trace] createCall failed:", result.error);
+      const status = result.error?.includes("Authentication") ? 401 : 400;
       return NextResponse.json(
         { error: result.error || "Failed to start call." },
-        { status: 400 }
+        { status }
       );
     }
 
@@ -86,9 +94,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function HEAD() {
-  const session = await getSession();
-  if (!session) {
-    return new NextResponse(null, { status: 401 });
+  const auth = await requireSession();
+  if (!auth.ok) {
+    return new NextResponse(null, { status: auth.status });
   }
   const count = await countActiveCalls();
   return new NextResponse(null, {

@@ -1,25 +1,56 @@
+function readEnv(...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (value) return value;
+  }
+  return undefined;
+}
+
 export function isSupabaseConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+  return Boolean(getSupabaseUrlOptional() && getSupabaseAnonKeyOptional() && getSupabaseServiceRoleKeyOptional());
+}
+
+function getSupabaseUrlOptional(): string | undefined {
+  return readEnv(
+    "SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "supabase_url",
+    "next_public_supabase_url"
+  );
+}
+
+function getSupabaseAnonKeyOptional(): string | undefined {
+  return readEnv(
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "supabase_anon_key",
+    "supabase_publishable_key",
+    "next_public_supabase_anon_key"
+  );
+}
+
+function getSupabaseServiceRoleKeyOptional(): string | undefined {
+  return readEnv(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "supabase_service_role_key"
   );
 }
 
 export function getSupabaseUrl(): string {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!url) throw new Error("NEXT_PUBLIC_SUPABASE_URL is not configured");
+  const url = getSupabaseUrlOptional();
+  if (!url) throw new Error("SUPABASE_URL is not configured");
   return url;
 }
 
 export function getSupabaseAnonKey(): string {
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!key) throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not configured");
+  const key = getSupabaseAnonKeyOptional();
+  if (!key) throw new Error("SUPABASE_ANON_KEY is not configured");
   return key;
 }
 
 export function getSupabaseServiceRoleKey(): string {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = getSupabaseServiceRoleKeyOptional();
   if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured");
   return key;
 }

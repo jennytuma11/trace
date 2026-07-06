@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
-import { getMockLookup } from "@/lib/mock-data";
+import { getAppLookup } from "@/lib/lookup";
+import { requireSession } from "@/lib/auth/require-session";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireSession();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  return NextResponse.json(getMockLookup());
+  return NextResponse.json(await getAppLookup());
 }
