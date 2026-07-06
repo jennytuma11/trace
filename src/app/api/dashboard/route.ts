@@ -13,6 +13,7 @@ import {
   getWeekRangeInTimezone,
   toStoredISOString,
 } from "@/lib/datetime";
+import { getReportingUnitBucket } from "@/lib/units/types";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -54,7 +55,8 @@ export async function GET(request: NextRequest) {
 
   const unitCounts: Record<string, number> = {};
   for (const call of todayCalls) {
-    unitCounts[call.unitLocation] = (unitCounts[call.unitLocation] || 0) + 1;
+    const bucket = getReportingUnitBucket(call.reportingUnit, call.mappingStatus);
+    unitCounts[bucket] = (unitCounts[bucket] || 0) + 1;
   }
 
   let mostFrequentCallType = "—";

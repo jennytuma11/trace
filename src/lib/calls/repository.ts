@@ -26,12 +26,16 @@ import { AUTH_ERROR_INVALID_SESSION } from "@/lib/auth/session-user";
 import { isUuid } from "@/lib/auth/uuid";
 import { isInstantInLocalDateRange } from "@/lib/datetime";
 import { CallStatus } from "@/lib/types";
+import { resolveUnitMapping } from "@/lib/units/crosswalk";
+import { MappingStatus } from "@/lib/units/types";
 
 interface SupabaseCallRow {
   id: string;
   call_type: string;
   rapid_response_category: string | null;
   unit_location: string;
+  reporting_unit: string | null;
+  mapping_status: MappingStatus;
   additional_notes: string | null;
   start_time: string;
   team_arrival_time: string | null;
@@ -81,6 +85,8 @@ function mapSupabaseRow(
     callTypeName: row.call_type,
     rapidResponseCategoryName: row.rapid_response_category,
     unitLocation: row.unit_location,
+    reportingUnit: row.reporting_unit,
+    mappingStatus: row.mapping_status ?? "Unmapped",
     additionalNotes: row.additional_notes,
     startTime: row.start_time,
     teamArrivalTime: row.team_arrival_time,
@@ -146,6 +152,8 @@ function filterCalls(calls: CallRecord[], options: ListCallsOptions): CallRecord
     filtered = filtered.filter(
       (call) =>
         call.unitLocation.toLowerCase().includes(q) ||
+        (call.reportingUnit?.toLowerCase().includes(q) ?? false) ||
+        call.mappingStatus.toLowerCase().includes(q) ||
         call.callType.name.toLowerCase().includes(q) ||
         (call.rapidResponseCategory?.name.toLowerCase().includes(q) ?? false) ||
         (call.outcome?.name.toLowerCase().includes(q) ?? false) ||
@@ -226,12 +234,17 @@ export async function createCall(
         null
       : null;
 
+    const trimmedLocation = input.unitLocation.trim();
+    const mapping = await resolveUnitMapping(trimmedLocation);
+
     const { data, error } = await admin
       .from("calls")
       .insert({
         call_type: callTypeIdToName(input.callTypeId),
         rapid_response_category: categoryName,
-        unit_location: input.unitLocation.trim(),
+        unit_location: trimmedLocation,
+        reporting_unit: mapping.reportingUnit,
+        mapping_status: mapping.mappingStatus,
         additional_notes: input.additionalNotes?.trim() || null,
         created_by: userId,
         event_type: isPractice ? "Practice" : "Operational",
@@ -254,7 +267,12 @@ export async function createCall(
     return { call };
   }
 
-  const result = createMockCall(userId, input);
+  const mapping = await resolveUnitMapping(input.unitLocation.trim());
+  const result = createMockCall(userId, {
+    ...input,
+    reportingUnit: mapping.reportingUnit,
+    mappingStatus: mapping.mappingStatus,
+  });
   return {
     call: result.call ? mockToCallRecord(result.call) : undefined,
     error: result.error,
@@ -475,6 +493,40 @@ export async function listReportingCalls(options: ListCallsOptions = {}): Promis
     reportingOnly: true,
     includeExcluded: false,
   });
+}
+
+export async function listUnmappedCalls(limit = 200): Promise<CallRecord[]> {
+  if (isSupabaseConfigured()) {
+    const admin = getSupabaseAdmin();
+    if (!admin) return listUnmappedCallsFromMock(limit);
+
+    const { data, error } = await admin
+      .from("calls")
+      .select("*")
+      .eq("mapping_status", "Unmapped")
+      .order("start_time", { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+
+    const profileIds = data.flatMap((row) =>
+      [row.created_by, row.excluded_by].filter(Boolean)
+    ) as string[];
+    const profiles = await fetchProfiles(profileIds);
+
+    return data
+      .map((row) => mapSupabaseRow(row as SupabaseCallRow, profiles))
+      .filter((call): call is CallRecord => call !== null);
+  }
+
+  return listUnmappedCallsFromMock(limit);
+}
+
+function listUnmappedCallsFromMock(limit: number): CallRecord[] {
+  return listMockCalls({ includeExcluded: true, reportingOnly: false })
+    .filter((call) => call.mappingStatus === "Unmapped")
+    .slice(0, limit)
+    .map(mockToCallRecord);
 }
 
 export { findCategoryIdByName, findOutcomeIdByName };

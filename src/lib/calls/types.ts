@@ -9,6 +9,7 @@ import {
   RAPID_RESPONSE_TYPE_ID,
 } from "@/lib/mock-data";
 import { CallStatus, EventType } from "@/lib/types";
+import { MappingStatus } from "@/lib/units/types";
 
 export interface CallRecord {
   id: string;
@@ -19,6 +20,8 @@ export interface CallRecord {
   rapidResponseCategoryId: string | null;
   rapidResponseCategory: { id: string; name: string } | null;
   unitLocation: string;
+  reportingUnit: string | null;
+  mappingStatus: MappingStatus;
   additionalNotes: string | null;
   startTime: string;
   teamArrivalTime: string | null;
@@ -129,6 +132,8 @@ export function enrichCallRecord(
     rapidResponseCategoryId: rapidResponseCategory?.id ?? null,
     rapidResponseCategory,
     unitLocation: partial.unitLocation,
+    reportingUnit: partial.reportingUnit ?? null,
+    mappingStatus: partial.mappingStatus ?? "Unmapped",
     additionalNotes: partial.additionalNotes,
     startTime: partial.startTime,
     teamArrivalTime: partial.teamArrivalTime,
@@ -148,4 +153,4 @@ export function enrichCallRecord(
   };
 }
 
-export type { CallStatus, EventType };
+export type { CallStatus, EventType, MappingStatus };

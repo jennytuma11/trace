@@ -14,6 +14,7 @@ import {
   getLocalDateKey,
   getTimezoneFromSearchParams,
 } from "@/lib/datetime";
+import { formatReportingUnitDisplay } from "@/lib/units/types";
 
 export type ExcelExportType = "dashboard" | "history" | "analytics" | "reports";
 
@@ -72,6 +73,8 @@ function historyRow(call: CallRecord, timeZone: string): (string | number)[] {
     call.callType.name,
     call.rapidResponseCategory?.name ?? "",
     call.unitLocation,
+    formatReportingUnitDisplay(call.reportingUnit, call.mappingStatus),
+    call.mappingStatus,
     formatResponseTime(call.responseTimeSeconds),
     formatTotalCallTime(call.totalCallDurationSeconds),
     call.outcome?.name ?? "",
@@ -86,7 +89,9 @@ const HISTORY_HEADERS = [
   "Start Time",
   "Call Type",
   "Rapid Response Category",
-  "Unit / Location",
+  "Entered Location",
+  "Reporting Unit",
+  "Mapping Status",
   "Response Time",
   "Total Call Time",
   "Outcome",
@@ -140,7 +145,7 @@ function buildDashboardWorkbook(data: Awaited<ReturnType<typeof computeDashboard
   );
   XLSX.utils.book_append_sheet(
     workbook,
-    tableSheet("Calls by Unit", ["Unit / Location", "Count"], data.callsByUnit.map((u) => [u.name, u.count])),
+    tableSheet("Calls by Unit", ["Reporting Unit", "Count"], data.callsByUnit.map((u) => [u.name, u.count])),
     "Calls by Unit"
   );
   XLSX.utils.book_append_sheet(
@@ -210,7 +215,7 @@ function buildAnalyticsWorkbook(
     workbook,
     tableSheet(
       "Response Time",
-      ["Event ID", "Call Type", "Unit / Location", "Response Time"],
+      ["Event ID", "Call Type", "Reporting Unit", "Response Time"],
       responseStats.rows.map((row) => [
         row.eventId,
         row.callType,
@@ -225,7 +230,7 @@ function buildAnalyticsWorkbook(
     workbook,
     tableSheet(
       "Time on Call",
-      ["Event ID", "Call Type", "Unit / Location", "Total Call Time"],
+      ["Event ID", "Call Type", "Reporting Unit", "Total Call Time"],
       timeOnCallStats.rows.map((row) => [
         row.eventId,
         row.callType,
@@ -244,7 +249,7 @@ function buildAnalyticsWorkbook(
 
   XLSX.utils.book_append_sheet(
     workbook,
-    tableSheet("Units", ["Unit / Location", "Count"], analytics.callsByUnit.map((u) => [u.name, u.count])),
+    tableSheet("Units", ["Reporting Unit", "Count"], analytics.callsByUnit.map((u) => [u.name, u.count])),
     "Units"
   );
 

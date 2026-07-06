@@ -8,6 +8,7 @@ import {
 } from "@/lib/mock-data";
 import { toStoredISOString } from "@/lib/datetime";
 import { CallStatus, EventType } from "@/lib/types";
+import { MappingStatus } from "@/lib/units/types";
 
 export interface MockCallRecord {
   id: string;
@@ -15,6 +16,8 @@ export interface MockCallRecord {
   callTypeId: string;
   rapidResponseCategoryId: string | null;
   unitLocation: string;
+  reportingUnit: string | null;
+  mappingStatus: MappingStatus;
   additionalNotes: string | null;
   startTime: Date;
   teamArrivalTime: Date | null;
@@ -40,6 +43,8 @@ export interface SerializedMockCall {
   rapidResponseCategoryId: string | null;
   rapidResponseCategory: { id: string; name: string } | null;
   unitLocation: string;
+  reportingUnit: string | null;
+  mappingStatus: MappingStatus;
   additionalNotes: string | null;
   startTime: string;
   teamArrivalTime: string | null;
@@ -61,6 +66,8 @@ export interface SerializedMockCall {
 export interface CreateMockCallInput {
   callTypeId: string;
   unitLocation: string;
+  reportingUnit?: string | null;
+  mappingStatus?: MappingStatus;
   rapidResponseCategoryId?: string | null;
   additionalNotes?: string | null;
   isPracticeTest?: boolean;
@@ -110,6 +117,8 @@ function serializeCall(call: MockCallRecord): SerializedMockCall | null {
     rapidResponseCategoryId: call.rapidResponseCategoryId,
     rapidResponseCategory,
     unitLocation: call.unitLocation,
+    reportingUnit: call.reportingUnit ?? null,
+    mappingStatus: call.mappingStatus ?? "Unmapped",
     additionalNotes: call.additionalNotes,
     startTime: toStoredISOString(call.startTime),
     teamArrivalTime: call.teamArrivalTime
@@ -153,6 +162,8 @@ export function createMockCall(
   const {
     callTypeId,
     unitLocation,
+    reportingUnit,
+    mappingStatus,
     rapidResponseCategoryId,
     additionalNotes,
     isPracticeTest,
@@ -194,6 +205,8 @@ export function createMockCall(
     callTypeId,
     rapidResponseCategoryId: categoryId,
     unitLocation: trimmedLocation,
+    reportingUnit: reportingUnit ?? null,
+    mappingStatus: mappingStatus ?? "Unmapped",
     additionalNotes: additionalNotes?.trim() || null,
     startTime: new Date(),
     teamArrivalTime: null,

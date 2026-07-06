@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { KpiCard } from "@/components/KpiCard";
-import { ActionButton } from "@/components/ActionButton";
 import { SetupBanner } from "@/components/SetupBanner";
 import { ExportExcelButton } from "@/components/ExportExcelButton";
 import { SessionUser } from "@/lib/types";
@@ -94,14 +93,6 @@ export function DashboardClient({ user }: DashboardPageProps) {
               <KpiCard label="Most frequent type" value={data.mostFrequentCallType} />
               <KpiCard label="Busiest unit" value={data.busiestUnit} />
             </div>
-
-            {canStartCall(user.role) && (
-              <Link href="/call/start">
-                <ActionButton size="xl" className="mt-2">
-                  Start Call
-                </ActionButton>
-              </Link>
-            )}
           </>
         ) : null}
       </div>

@@ -51,6 +51,15 @@ exception
   when duplicate_object then null;
 end $$;
 
+do $$ begin
+  create type public.trace_mapping_status as enum (
+    'Mapped',
+    'Unmapped'
+  );
+exception
+  when duplicate_object then null;
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- profiles
 -- ---------------------------------------------------------------------------
@@ -77,6 +86,8 @@ create table if not exists public.calls (
   call_type text not null check (call_type in ('Rapid Response', 'Code Blue')),
   rapid_response_category text,
   unit_location text not null,
+  reporting_unit text,
+  mapping_status public.trace_mapping_status not null default 'Unmapped',
   additional_notes text,
   start_time timestamptz not null default now(),
   team_arrival_time timestamptz,
@@ -109,6 +120,27 @@ create index if not exists calls_created_by_idx on public.calls (created_by);
 create index if not exists calls_unit_location_idx on public.calls (unit_location);
 create index if not exists calls_call_type_idx on public.calls (call_type);
 create index if not exists calls_outcome_idx on public.calls (outcome);
+create index if not exists calls_reporting_unit_idx on public.calls (reporting_unit);
+create index if not exists calls_mapping_status_idx on public.calls (mapping_status);
+
+-- ---------------------------------------------------------------------------
+-- unit_crosswalk
+-- Administrator-defined location → reporting unit rules (no auto-guessing)
+-- ---------------------------------------------------------------------------
+create table if not exists public.unit_crosswalk (
+  id uuid primary key default gen_random_uuid(),
+  location_pattern text not null,
+  reporting_unit text not null,
+  description text,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.unit_crosswalk is 'Administrator-defined unit location crosswalk patterns.';
+
+create index if not exists unit_crosswalk_active_idx on public.unit_crosswalk (active);
+create index if not exists unit_crosswalk_pattern_idx on public.unit_crosswalk (location_pattern);
 
 -- ---------------------------------------------------------------------------
 -- updated_at triggers
@@ -132,6 +164,12 @@ create trigger profiles_set_updated_at
 drop trigger if exists calls_set_updated_at on public.calls;
 create trigger calls_set_updated_at
   before update on public.calls
+  for each row
+  execute function public.set_updated_at();
+
+drop trigger if exists unit_crosswalk_set_updated_at on public.unit_crosswalk;
+create trigger unit_crosswalk_set_updated_at
+  before update on public.unit_crosswalk
   for each row
   execute function public.set_updated_at();
 
@@ -171,6 +209,7 @@ create trigger on_auth_user_created
 -- ---------------------------------------------------------------------------
 alter table public.profiles enable row level security;
 alter table public.calls enable row level security;
+alter table public.unit_crosswalk enable row level security;
 
 -- profiles
 drop policy if exists "Authenticated users can read profiles" on public.profiles;
@@ -218,6 +257,29 @@ create policy "Authenticated users can update calls"
   using (true)
   with check (true);
 
+-- unit_crosswalk
+drop policy if exists "Authenticated users can read unit crosswalk" on public.unit_crosswalk;
+create policy "Authenticated users can read unit crosswalk"
+  on public.unit_crosswalk
+  for select
+  to authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can insert unit crosswalk" on public.unit_crosswalk;
+create policy "Authenticated users can insert unit crosswalk"
+  on public.unit_crosswalk
+  for insert
+  to authenticated
+  with check (true);
+
+drop policy if exists "Authenticated users can update unit crosswalk" on public.unit_crosswalk;
+create policy "Authenticated users can update unit crosswalk"
+  on public.unit_crosswalk
+  for update
+  to authenticated
+  using (true)
+  with check (true);
+
 -- ---------------------------------------------------------------------------
 -- Grants (Supabase roles)
 -- ---------------------------------------------------------------------------
@@ -228,6 +290,9 @@ grant select, insert, update on table public.profiles to authenticated;
 
 grant all on table public.calls to postgres, service_role;
 grant select, insert, update on table public.calls to authenticated;
+
+grant all on table public.unit_crosswalk to postgres, service_role;
+grant select, insert, update on table public.unit_crosswalk to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Verification (optional — run separately after the script succeeds)

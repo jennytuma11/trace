@@ -9,6 +9,7 @@ import {
   getTodayRangeInTimezone,
   isInstantInLocalDateRange,
 } from "@/lib/datetime";
+import { getReportingUnitBucket } from "@/lib/units/types";
 
 export interface AnalyticsResult {
   callsByType: { name: string; count: number }[];
@@ -52,7 +53,8 @@ export async function computeAnalytics(
 
     const typeLabel = call.callType.name;
     callsByType[typeLabel] = (callsByType[typeLabel] || 0) + 1;
-    callsByUnit[call.unitLocation] = (callsByUnit[call.unitLocation] || 0) + 1;
+    callsByUnit[getReportingUnitBucket(call.reportingUnit, call.mappingStatus)] =
+      (callsByUnit[getReportingUnitBucket(call.reportingUnit, call.mappingStatus)] || 0) + 1;
 
     const hour = getLocalHour(call.startTime, timeZone);
     callsByHour[hour] = (callsByHour[hour] || 0) + 1;
@@ -142,7 +144,8 @@ export async function computeDashboardExportData(
       outcomes[call.outcome.name] = (outcomes[call.outcome.name] || 0) + 1;
     }
 
-    callsByUnit[call.unitLocation] = (callsByUnit[call.unitLocation] || 0) + 1;
+    callsByUnit[getReportingUnitBucket(call.reportingUnit, call.mappingStatus)] =
+      (callsByUnit[getReportingUnitBucket(call.reportingUnit, call.mappingStatus)] || 0) + 1;
 
     const dayKey = formatLocalDateKey(getLocalDateKey(call.startTime, timeZone));
     callsByDay[dayKey] = (callsByDay[dayKey] || 0) + 1;
@@ -191,7 +194,7 @@ export function computeResponseTimeStats(calls: CallRecord[]) {
     .map((call) => ({
       eventId: call.id,
       callType: call.callType.name,
-      unit: call.unitLocation,
+      unit: getReportingUnitBucket(call.reportingUnit, call.mappingStatus),
       responseTimeSeconds: call.responseTimeSeconds!,
     }));
 
@@ -208,7 +211,7 @@ export function computeTimeOnCallStats(calls: CallRecord[]) {
     .map((call) => ({
       eventId: call.id,
       callType: call.callType.name,
-      unit: call.unitLocation,
+      unit: getReportingUnitBucket(call.reportingUnit, call.mappingStatus),
       totalCallDurationSeconds: call.totalCallDurationSeconds!,
     }));
 

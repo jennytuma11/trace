@@ -27,6 +27,8 @@ interface Call {
   callType: { name: string };
   rapidResponseCategory: { name: string } | null;
   unitLocation: string;
+  reportingUnit: string | null;
+  mappingStatus: "Mapped" | "Unmapped";
   additionalNotes: string | null;
   resolutionNotes: string | null;
   startTime: string;
@@ -185,7 +187,25 @@ export function CallDetailClient({ user, callId }: CallDetailClientProps) {
             }
           />
           <InfoRow label="RR Category" value={call.rapidResponseCategory?.name ?? "—"} />
-          <InfoRow label="Unit / Location" value={call.unitLocation} />
+          <InfoRow label="Entered Location" value={call.unitLocation} />
+          <InfoRow
+            label="Reporting Unit"
+            value={call.reportingUnit ?? "Unmapped"}
+          />
+          <InfoRow
+            label="Mapping Status"
+            value={
+              <span
+                className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                  call.mappingStatus === "Mapped"
+                    ? "bg-teal-100 text-primary"
+                    : "bg-amber-100 text-amber-800"
+                }`}
+              >
+                {call.mappingStatus}
+              </span>
+            }
+          />
           <InfoRow label="Event Type" value={call.eventType} />
           <InfoRow label="Team Member" value={call.user.name} />
           <InfoRow label="Start Time" value={formatLocalDateTime(call.startTime)} />
