@@ -234,9 +234,12 @@ export function SettingsClient({ user }: { user: SessionUser }) {
                 administrator-defined rules are applied.
               </p>
               <p className="text-xs text-muted mt-2">
-                Patterns use <code className="bg-background px-1 rounded">*</code> as a wildcard
-                (e.g. <code className="bg-background px-1 rounded">3*</code> matches 3 West, 3E,
-                etc.).
+                Patterns support{" "}
+                <code className="bg-background px-1 rounded">*</code> wildcards (
+                <code className="bg-background px-1 rounded">ICU*</code>,{" "}
+                <code className="bg-background px-1 rounded">ct</code>), and numeric ranges (
+                <code className="bg-background px-1 rounded">2000-2017</code> matches room{" "}
+                <code className="bg-background px-1 rounded">2008</code>).
               </p>
             </div>
             <ActionButton
@@ -429,7 +432,7 @@ function RuleForm({
           type="text"
           value={form.locationPattern}
           onChange={(e) => onChange({ ...form, locationPattern: e.target.value })}
-          placeholder="e.g. ICU*"
+          placeholder="e.g. ICU*, 2000-2017, or ct"
           className="w-full px-3 py-2 rounded-lg border border-border"
         />
       </label>
